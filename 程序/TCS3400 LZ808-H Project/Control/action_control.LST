@@ -1,0 +1,188 @@
+C51 COMPILER V9.54   ACTION_CONTROL                                                        06/26/2026 17:08:44 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE ACTION_CONTROL
+OBJECT MODULE PLACED IN Control\action_control.OBJ
+COMPILER INVOKED BY: D:\Keil_v5\C51\BIN\C51.exe Control\action_control.c OPTIMIZE(8) INCDIR(D:\Keil_v5\C51\INC\STC;Hardw
+                    -are;System;User;App;Control)
+
+line level    source
+
+   1          #include "action_control.h"
+   2          
+   3          /* X输入检测引脚定义 */
+   4          sbit X1_PIN = P5^1;
+   5          sbit X2_PIN = P3^5;
+   6          sbit X3_PIN = P3^6;
+   7          sbit X4_PIN = P3^7;
+   8          
+   9          /* Y输出引脚定义 */
+  10          sbit Y1_PIN = P3^2;
+  11          sbit Y2_PIN = P3^3;
+  12          sbit Y3_PIN = P3^4;
+  13          sbit Y4_PIN = P5^0;
+  14          
+  15          /* 运行指示灯引脚 */
+  16          sbit RUN_LED = P5^4;
+  17          
+  18          /* 运行指示灯控制宏 */
+  19          #define RUN_LED_ON()       (RUN_LED = 1)
+  20          #define RUN_LED_OFF()      (RUN_LED = 0)
+  21          #define RUN_LED_TOGGLE()   (RUN_LED = !RUN_LED)
+  22          
+  23          
+  24          
+  25          /**
+  26           * @brief 初始化Y输出
+  27           */
+  28          void Yn_Init(void)
+  29          {
+  30   1          Y_AllOff();
+  31   1      }
+  32          
+  33          /**
+  34           * @brief 控制指定Y输出
+  35           * @param yn Y1~Y4
+  36           * @param state Y_ON或Y_OFF
+  37           */
+  38          void Yn_Control(unsigned char yn, unsigned char state)
+  39          {
+  40   1          switch(yn)
+  41   1          {
+  42   2              case Y1:
+  43   2                  Y1_PIN = state;
+  44   2                  break;
+  45   2      
+  46   2              case Y2:
+  47   2                  Y2_PIN = state;
+  48   2                  break;
+  49   2      
+  50   2              case Y3:
+  51   2                  Y3_PIN = state;
+  52   2                  break;
+  53   2      
+  54   2              case Y4:
+C51 COMPILER V9.54   ACTION_CONTROL                                                        06/26/2026 17:08:44 PAGE 2   
+
+  55   2                  Y4_PIN = state;
+  56   2                  break;
+  57   2      
+  58   2              default:
+  59   2                  break;
+  60   2          }
+  61   1      }
+  62          
+  63          /**
+  64           * @brief 全开Y输出
+  65          void Y_AllOn(void)
+  66          {
+  67              Y1_PIN = Y_ON;
+  68              Y2_PIN = Y_ON;
+  69              Y3_PIN = Y_ON;
+  70              Y4_PIN = Y_ON;
+  71          }
+  72          
+  73          /**
+  74           * @brief 全关Y输出
+  75           */
+  76          void Y_AllOff(void)
+  77          {
+  78   1          Y1_PIN = Y_OFF;
+  79   1          Y2_PIN = Y_OFF;
+  80   1          Y3_PIN = Y_OFF;
+  81   1          Y4_PIN = Y_OFF;
+  82   1      }
+  83          
+  84          /**
+  85           * @brief 读取指定X输入
+  86           * @param xn X1~X4
+  87           * @return 0检测到或1未检测到
+  88           */
+  89          unsigned char Xn_Read(unsigned char xn)
+  90          {
+  91   1          switch(xn)
+  92   1          {
+  93   2              case X1:
+  94   2                  return X1_PIN;
+  95   2      
+  96   2              case X2:
+  97   2                  return X2_PIN;
+  98   2      
+  99   2              case X3:
+ 100   2                  return X3_PIN;
+ 101   2      
+ 102   2              case X4:
+ 103   2                  return X4_PIN;
+ 104   2      
+ 105   2              default:
+ 106   2                  return X_NOT_DETECTED;
+ 107   2          }
+ 108   1      }
+ 109          
+ 110          /**
+ 111           * @brief 根据X输入控制对应Y输出
+ 112           */
+ 113          void XY_Control(void)
+ 114          {
+ 115   1          if(Xn_Read(X1) == X_DETECTED)
+ 116   1          {
+C51 COMPILER V9.54   ACTION_CONTROL                                                        06/26/2026 17:08:44 PAGE 3   
+
+ 117   2              Yn_Control(Y1, Y_ON);
+ 118   2          }
+ 119   1          else
+ 120   1          {
+ 121   2              Yn_Control(Y1, Y_OFF);
+ 122   2          }
+ 123   1      
+ 124   1          if(Xn_Read(X2) == X_DETECTED)
+ 125   1          {
+ 126   2              Yn_Control(Y2, Y_ON);
+ 127   2          }
+ 128   1          else
+ 129   1          {
+ 130   2              Yn_Control(Y2, Y_OFF);
+ 131   2          }
+ 132   1      
+ 133   1          if(Xn_Read(X3) == X_DETECTED)
+ 134   1          {
+ 135   2              Yn_Control(Y3, Y_ON);
+ 136   2          }
+ 137   1          else
+ 138   1          {
+ 139   2              Yn_Control(Y3, Y_OFF);
+ 140   2          }
+ 141   1      
+ 142   1          if(Xn_Read(X4) == X_DETECTED)
+ 143   1          {
+ 144   2              Yn_Control(Y4, Y_ON);
+ 145   2          }
+ 146   1          else
+ 147   1          {
+ 148   2              Yn_Control(Y4, Y_OFF);
+ 149   2          }
+ 150   1      }
+ 151          
+ 152          /**
+ 153           * @brief 运行指示灯翻转一次
+ 154           * @param xms 翻转间延时时间，0~65535ms
+ 155           */
+ 156          void Run_LED_Blink(unsigned int xms)
+ 157          {
+ 158   1          RUN_LED_TOGGLE();
+ 159   1          Delay_ms(xms);
+ 160   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    169    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

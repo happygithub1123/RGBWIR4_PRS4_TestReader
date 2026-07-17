@@ -1,0 +1,44 @@
+C51 COMPILER V9.54   EXINT                                                                 06/26/2026 13:37:51 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE EXINT
+OBJECT MODULE PLACED IN System\Exint.OBJ
+COMPILER INVOKED BY: D:\Keil_v5\C51\BIN\C51.exe System\Exint.c OPTIMIZE(8) INCDIR(D:\Keil_v5\C51\INC\STC;Hardware;System
+                    -;User;App;Control)
+
+line level    source
+
+   1          #include "Exint.h"
+   2          
+   3          void INT0_Init(void)
+   4          {
+   5   1              IE0 = 0;            //初始化可以清零（后续软件自动清0）  
+   6   1              IT0 = 0;                        //INT0(P3.2)下降沿中断
+   7   1              EX0 = 1;                        //使能INT0中断
+   8   1              //中断优先级设置
+   9   1      //      PX0 = 1;
+  10   1      //      IPH |= 0x01; 
+  11   1      }
+  12          
+  13          
+  14          
+  15          
+  16          void INT0_Isr(void) interrupt 0
+  17          {
+  18   1              
+  19   1      }
+  20          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =      8    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

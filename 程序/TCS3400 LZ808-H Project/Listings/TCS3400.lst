@@ -1,0 +1,508 @@
+C51 COMPILER V9.54   TCS3400                                                               01/29/2026 10:42:10 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE TCS3400
+OBJECT MODULE PLACED IN .\Objects\TCS3400.obj
+COMPILER INVOKED BY: D:\Keil_v5\C51\BIN\C51.EXE Hardware\TCS3400.c WARNINGLEVEL(0) OPTIMIZE(8,SPEED) BROWSE INCDIR(.\Har
+                    -dware;.\System;.\User) DEBUG OBJECTEXTEND PRINT(.\Listings\TCS3400.lst) OBJECT(.\Objects\TCS3400.obj)
+
+line level    source
+
+   1          #include "TCS3400.h"
+   2          
+   3          #define WLED_C_MIN          450     // 白光亮度最低要求（比你原来800更容易触发）
+   4          #define WLED_RGB_MIN        150     // RGB至少有点量（防止暗场误判）
+   5          #define WLED_BALANCE_PCT     35     // RGB均衡度：max-min 相对 avg 的百分比（越小越严格）
+   6          #define WLED_MAXMIN_PCT     160     // max/min < 1.60 认为均衡（越小越严格）
+   7          
+   8          
+   9          /* ================= TCS3400读写寄存器操作 ================= */
+  10          
+  11          
+  12          /*------------------------------------------------
+  13           * 内部基础 I2C 写 1 字节
+  14           *
+  15           * @param reg  TCS3400 寄存器地址（例如 0x80/0x81/0x94...）
+  16           * @param val  要写入寄存器的数据
+  17           *------------------------------------------------*/
+  18          static void TCS_Write8(uint8 reg, uint8 val)
+  19          {
+  20   1          I2C_WriteReg(TCS3400_I2C_ADDR_7BIT, reg, val);
+  21   1      }
+  22          
+  23          
+  24          /*------------------------------------------------
+  25           * 内部基础 I2C 读 1 字节
+  26           *
+  27           * @param reg  寄存器地址
+  28           * @return     读出的 8 位寄存器值
+  29           *------------------------------------------------*/
+  30          static uint8 TCS_Read8(uint8 reg)
+  31          {
+  32   1          return I2C_ReadReg(TCS3400_I2C_ADDR_7BIT, reg);
+  33   1      }
+  34          
+  35          
+  36          /*------------------------------------------------
+  37           * 内部基础 I2C 读 16 位（低字节 + 高字节）
+  38           *
+  39           * @param reg_low  低字节寄存器地址（必须是偶地址，如 0x94/0x96...）
+  40           * @return         16 位数据
+  41           *------------------------------------------------*/
+  42          static uint16 TCS_Read16(uint8 reg_low)
+  43          {
+  44   1          uint8 low, high;
+  45   1      
+  46   1          low  = TCS_Read8(reg_low);
+  47   1          high = TCS_Read8(reg_low + 1);
+  48   1      
+  49   1          return ((uint16)high << 8) | low;
+  50   1      }
+  51          
+  52          
+  53          
+  54          /* ================= TCS3400轮询驱动实现 ================= */
+C51 COMPILER V9.54   TCS3400                                                               01/29/2026 10:42:10 PAGE 2   
+
+  55          
+  56          
+  57          /*------------------------------------------------
+  58           * @brief TCS3400 初始化
+  59           *
+  60           * 推荐配置：
+  61           *  ATIME = 100ms
+  62           *  AGAIN = 4x
+  63           *  ENABLE = PON + AEN
+  64           *------------------------------------------------*/
+  65          void TCS3400_Init(void)
+  66          {
+  67   1          /* 1) 上电 PON */
+  68   1          TCS_Write8(TCS3400_ENABLE, TCS3400_EN_PON);
+  69   1          Delay_ms(3);
+  70   1      
+  71   1          /* 2) 配置积分时间 + 增益 */
+  72   1          TCS3400_SetATIME(TCS3400_CalcATIME(100));
+  73   1          TCS3400_SetGain(TCS3400_GAIN_4X);
+  74   1      
+  75   1          /* 3) 不使用等待功能（WTIME/WEN 可选）
+  76   1             如果你想加等待，可这样：
+  77   1             TCS3400_SetWTIME(0xFF); // 2.78ms
+  78   1             ENABLE = PON | AEN | WEN;
+  79   1          */
+  80   1      
+  81   1          /* 4) 开启 RGBC 转换 AEN */
+  82   1          TCS_Write8(TCS3400_ENABLE, TCS3400_EN_PON | TCS3400_EN_AEN);
+  83   1      }
+  84          
+  85          
+  86          /*------------------------------------------------
+  87           * @brief 根据期望积分时间（ms）计算 ATIME（无浮点）
+  88           *
+  89           * 积分时间公式：
+  90           *   T_int = (256 - ATIME) * 2.78ms
+  91           *
+  92           * 这里用整数近似：
+  93           *   Cycles ≈ time_ms / 2.78
+  94           *   Cycles ≈ (time_ms * 100) / 278
+  95           *------------------------------------------------*/
+  96          uint8 TCS3400_CalcATIME(uint16 time_ms)
+  97          {
+  98   1          uint16 xdata cycles;  // ← 加 xdata
+  99   1      
+ 100   1          if (time_ms < 3)   time_ms = 3;
+ 101   1          if (time_ms > 700) time_ms = 700;
+ 102   1      
+ 103   1          /* cycles = time_ms / 2.78 */
+ 104   1          cycles = (time_ms * 100) / 278;
+ 105   1      
+ 106   1          if (cycles < 1)   cycles = 1;
+ 107   1          if (cycles > 256) cycles = 256;
+ 108   1      
+ 109   1          return (uint8)(256 - cycles);
+ 110   1      }
+ 111          
+ 112          
+ 113          
+ 114          /*------------------------------------------------
+ 115           * @brief 设置 RGBC 积分时间寄存器 ATIME
+ 116           *
+C51 COMPILER V9.54   TCS3400                                                               01/29/2026 10:42:10 PAGE 3   
+
+ 117           * @param atime ATIME 寄存器值（0~255）
+ 118           *
+ 119           * 示例：
+ 120           *   TCS3400_SetATIME(220);   // 约 100ms
+ 121           *------------------------------------------------*/
+ 122          
+ 123          
+ 124          void TCS3400_SetATIME(uint8 atime)
+ 125          {
+ 126   1          TCS_Write8(TCS3400_ATIME, atime);
+ 127   1      }
+ 128          
+ 129          
+ 130          /*------------------------------------------------
+ 131           * @brief 设置 RGBC 模拟增益
+ 132           *
+ 133           * @param gain 增益参数
+ 134           *
+ 135           * 示例：
+ 136           *   TCS3400_SetGain(TCS_GAIN_4X);
+ 137           *------------------------------------------------*/
+ 138          
+ 139          
+ 140          void TCS3400_SetGain(uint8 gain)
+ 141          {
+ 142   1              
+ 143   1              
+ 144   1          TCS_Write8(TCS3400_CONTROL, (gain & 0x03));
+ 145   1      }
+ 146          
+ 147          
+ 148          
+ 149          /*------------------------------------------------
+ 150           * @brief 等待 TCS3400 数据有效（AVALID=1），带超时保护
+ 151           *
+ 152           * @param 无
+ 153           *
+ 154           * 示例：
+ 155           *   if (TCS3400_WaitValid()) { read RGBC  }
+ 156           *------------------------------------------------*/
+ 157           
+ 158          static bit TCS3400_WaitValid(void)
+ 159          {
+ 160   1          uint8 t = 100; // 超时计数
+ 161   1          while(t--)
+ 162   1          {
+ 163   2              if (TCS_Read8(TCS3400_STATUS) & TCS3400_STATUS_AVALID)
+ 164   2                  return 1;
+ 165   2              Delay_ms(3);
+ 166   2          }
+ 167   1          return 0;
+ 168   1      }
+ 169          
+ 170          
+ 171          /*------------------------------------------------
+ 172           * @brief 设置等待时间寄存器 WTIME（可选）
+ 173           *
+ 174           * @param wtime WTIME 寄存器值（0~255）
+ 175           *
+ 176           * 说明：
+ 177           *  - 仅写 WTIME 不会生效，必须在 ENABLE 里打开 WEN 才会启用等待功能
+ 178           *  - 等待时间公式（典型）：Twait = (256 - WTIME) * 2.78ms
+C51 COMPILER V9.54   TCS3400                                                               01/29/2026 10:42:10 PAGE 4   
+
+ 179           *
+ 180           * 示例：
+ 181           *   TCS3400_SetWTIME(0xFF); // 约 2.78ms
+ 182           *------------------------------------------------*/
+ 183          void TCS3400_SetWTIME(uint8 wtime)
+ 184          {
+ 185   1          TCS_Write8(TCS3400_WTIME, wtime);
+ 186   1      }
+ 187          
+ 188          
+ 189          
+ 190          
+ 191          
+ 192          
+ 193          
+ 194          
+ 195          
+ 196          
+ 197          /*------------------------------------------------
+ 198           * @brief 读取 IR（通过 0xC0 bit7 切换到 IR，再读 Clear）
+ 199           *------------------------------------------------*/
+ 200          /*------------------------------------------------
+ 201           * @brief 读取 IR（通过 0xC0 bit7 切换到 IR，再读 Clear）
+ 202           *------------------------------------------------*/
+ 203          uint16 TCS3400_ReadIR(void)
+ 204          {
+ 205   1          uint16 xdata ir;  // ← 加 xdata 关键字，放到外部RAM
+ 206   1      
+ 207   1          /* 切到 IR */
+ 208   1          TCS_Write8(TCS3400_IR, TCS3400_IR_ENABLE);
+ 209   1      
+ 210   1          /* 等一帧积分完成（否则读到旧数据） */
+ 211   1          TCS3400_WaitValid();
+ 212   1      
+ 213   1          /* 从 Clear 口读 IR */
+ 214   1          ir = TCS_Read16(TCS3400_CDATAL);
+ 215   1      
+ 216   1          /* 切回正常 Clear */
+ 217   1          TCS_Write8(TCS3400_IR, TCS3400_IR_DISABLE);
+ 218   1      
+ 219   1          /* 建议再等一次（保证下一次读RGB是新数据） */
+ 220   1          TCS3400_WaitValid();
+ 221   1      
+ 222   1          return ir;
+ 223   1      }
+ 224          
+ 225          
+ 226          
+ 227          /*------------------------------------------------
+ 228           * @brief 读取 TCS3400 原始 RGBC + IR 数据（轮询版）
+ 229           *------------------------------------------------*/
+ 230          void TCS3400_ReadRaw(uint16 *r,
+ 231                               uint16 *g,
+ 232                               uint16 *b,
+ 233                               uint16 *c,
+ 234                               uint16 *ir)
+ 235          {
+ 236   1          TCS3400_ReadRGBC(r, g, b, c);
+ 237   1          *ir = TCS3400_ReadIR();
+ 238   1      }
+ 239          
+ 240          
+C51 COMPILER V9.54   TCS3400                                                               01/29/2026 10:42:10 PAGE 5   
+
+ 241          
+ 242          /*------------------------------------------------
+ 243           * @brief 读取 RGBC（不包含IR）
+ 244           *------------------------------------------------*/
+ 245          void TCS3400_ReadRGBC(uint16 *r, uint16 *g, uint16 *b, uint16 *c)
+ 246          {
+ 247   1          *c = TCS_Read16(TCS3400_CDATAL);
+ 248   1          *r = TCS_Read16(TCS3400_RDATAL);
+ 249   1          *g = TCS_Read16(TCS3400_GDATAL);
+ 250   1          *b = TCS_Read16(TCS3400_BDATAL);
+ 251   1      }
+ 252          
+ 253          
+ 254          
+ 255          /* ================= 颜色识别 ================= */
+ 256          
+ 257          
+ 258          
+ 259          /*------------------------------------------------
+ 260           * @brief 判断白色
+ 261           *------------------------------------------------*/
+ 262          
+ 263          /* 白色判断（普通白色/白纸/白背景） */
+ 264          static bit Is_White(uint16 r, uint16 g, uint16 b, uint16 c)
+ 265          {
+ 266   1          if (c < C_DARK_TH) return 0;
+ 267   1      
+ 268   1          if (r < WHITE_MIN_RGB || g < WHITE_MIN_RGB || b < WHITE_MIN_RGB)
+ 269   1              return 0;
+ 270   1      
+ 271   1          if ((r > g ? r - g : g - r) > WHITE_DIFF_MAX) return 0;
+ 272   1          if ((r > b ? r - b : b - r) > WHITE_DIFF_MAX) return 0;
+ 273   1          if ((g > b ? g - b : b - g) > WHITE_DIFF_MAX) return 0;
+ 274   1      
+ 275   1          return 1;
+ 276   1      }
+ 277          /* 更强的白光LED判断（仍然返回 WHITE，不新增枚举） */
+ 278          static bit Is_WhiteLED(uint16 r, uint16 g, uint16 b, uint16 c)
+ 279          {
+ 280   1          /* 白色LED一般整体更亮 */
+ 281   1          if (c < 800) return 0;
+ 282   1      
+ 283   1          /* RGB 都要够亮 */
+ 284   1          if (r < 700 || g < 700 || b < 700) return 0;
+ 285   1      
+ 286   1          /* RGB 要接近（白光特征） */
+ 287   1          if ((r > g ? r - g : g - r) > 250) return 0;
+ 288   1          if ((r > b ? r - b : b - r) > 250) return 0;
+ 289   1          if ((g > b ? g - b : b - g) > 250) return 0;
+ 290   1      
+ 291   1          return 1;
+ 292   1      }
+ 293          
+ 294          
+ 295          /*------------------------------------------------
+ 296           * @brief 对外提供白色LED判断接口（给 main 用）
+ 297           *------------------------------------------------*/
+ 298          /* ================= 白色LED识别参数（可调） ================= */
+ 299          
+ 300          
+ 301          static bit TCS3400_IsWhiteLED(uint16 r, uint16 g, uint16 b, uint16 c)
+ 302          {
+C51 COMPILER V9.54   TCS3400                                                               01/29/2026 10:42:10 PAGE 6   
+
+ 303   1          static bit wled_flag = 0;
+ 304   1      
+ 305   1          uint16 xdata maxv, minv;   // 加 xdata
+ 306   1          uint32 xdata sum;          // 加 xdata（最重要！）
+ 307   1          uint16 xdata avg;          // 加 xdata
+ 308   1          uint16 xdata ratio;        // 加 xdata
+ 309   1      
+ 310   1          /* 计算平均亮度（只看RGB，不被IR干扰） */
+ 311   1          sum = (uint32)r + (uint32)g + (uint32)b;
+ 312   1          avg = (uint16)(sum / 3);
+ 313   1      
+ 314   1          /* 找最大最小 */
+ 315   1          maxv = r;
+ 316   1          if (g > maxv) maxv = g;
+ 317   1          if (b > maxv) maxv = b;
+ 318   1      
+ 319   1          minv = r;
+ 320   1          if (g < minv) minv = g;
+ 321   1          if (b < minv) minv = b;
+ 322   1      
+ 323   1          if (minv == 0) minv = 1;
+ 324   1      
+ 325   1          /* max/min 比例（白光应该接近1，彩色会很大） */
+ 326   1          ratio = (uint16)(((uint32)maxv * 100) / minv);   // 100=1.00倍
+ 327   1      
+ 328   1          /* ================== 滞回判断 ================== */
+ 329   1          if (wled_flag == 0)
+ 330   1          {
+ 331   2              /* 进入白光LED条件（严格） */
+ 332   2              if (c > 1200 && avg > 800 && ratio < 150)     // <1.5倍
+ 333   2                  wled_flag = 1;
+ 334   2          }
+ 335   1          else
+ 336   1          {
+ 337   2              /* 退出白光LED条件（放松一点） */
+ 338   2              if (c < 900 || avg < 600 || ratio > 180)      // >1.8倍
+ 339   2                  wled_flag = 0;
+ 340   2          }
+ 341   1      
+ 342   1          return wled_flag;
+ 343   1      }
+ 344          
+ 345          
+ 346          /*------------------------------------------------
+ 347           * @brief 判断当前颜色是否为红色
+ 348           *
+ 349           * 判断原理：
+ 350           * 红色通道的数值明显大于绿色和蓝色通道，
+ 351           * 且至少是它们的 COLOR_RATIO 倍，
+ 352           * 用于排除亮度变化带来的误判。
+ 353           *
+ 354           * @param r  红色通道原始数据
+ 355           * @param g  绿色通道原始数据
+ 356           * @param b  蓝色通道原始数据
+ 357           *
+ 358           * @return 1：判断为红色
+ 359           *         0：非红色
+ 360           *
+ 361           * 示例：
+ 362           *   r=1600 g=300 b=280 → 返回 1（红色）
+ 363           *   r=900  g=850 b=800 → 返回 0（接近白色）
+ 364           *------------------------------------------------*/
+C51 COMPILER V9.54   TCS3400                                                               01/29/2026 10:42:10 PAGE 7   
+
+ 365          static bit Is_Red(uint16 r, uint16 g, uint16 b)
+ 366          {
+ 367   1          return (r > g * COLOR_RATIO) && (r > b * COLOR_RATIO);
+ 368   1      }
+ 369          
+ 370          
+ 371          
+ 372          /*------------------------------------------------
+ 373           * @brief 判断当前颜色是否为绿色
+ 374           *
+ 375           * 判断原理：
+ 376           * 绿色通道能量明显高于红色和蓝色通道，
+ 377           * 并且达到 COLOR_RATIO 的比例关系。
+ 378           *
+ 379           * @param r  红色通道原始数据
+ 380           * @param g  绿色通道原始数据
+ 381           * @param b  蓝色通道原始数据
+ 382           *
+ 383           * @return 1：判断为绿色
+ 384           *         0：非绿色
+ 385           *
+ 386           * 示例：
+ 387           *   r=320 g=1500 b=400 → 返回 1（绿色）
+ 388           *   r=700 g=720  b=690 → 返回 0（白光）
+ 389           *------------------------------------------------*/
+ 390          static bit Is_Green(uint16 r, uint16 g, uint16 b)
+ 391          {
+ 392   1          return (g > r * COLOR_RATIO) && (g > b * COLOR_RATIO);
+ 393   1      }
+ 394          
+ 395          
+ 396          
+ 397          /*------------------------------------------------
+ 398           * @brief 判断当前颜色是否为蓝色
+ 399           *
+ 400           * 判断原理：
+ 401           * 蓝色通道占主导，且显著高于红色和绿色通道，
+ 402           * 利用比例判断避免误识别浅色或白光。
+ 403           *
+ 404           * @param r  红色通道原始数据
+ 405           * @param g  绿色通道原始数据
+ 406           * @param b  蓝色通道原始数据
+ 407           *
+ 408           * @return 1：判断为蓝色
+ 409           *         0：非蓝色
+ 410           *
+ 411           * 示例：
+ 412           *   r=260 g=300 b=1700 → 返回 1（蓝色）
+ 413           *   r=800 g=780 b=790  → 返回 0（白光）
+ 414           *------------------------------------------------*/
+ 415          static bit Is_Blue(uint16 r, uint16 g, uint16 b)
+ 416          {
+ 417   1          return (b > r * COLOR_RATIO) && (b > g * COLOR_RATIO);
+ 418   1      }
+ 419          
+ 420          
+ 421          
+ 422          /*------------------------------------------------
+ 423           * @brief TCS3400 颜色识别总接口（工程级）
+ 424           *
+ 425           * 颜色判断顺序（工程经验）：
+ 426           * 1. 黑色 / 暗场（亮度不足）
+C51 COMPILER V9.54   TCS3400                                                               01/29/2026 10:42:10 PAGE 8   
+
+ 427           * 2. 红外光（IR 占比过高）
+ 428           * 3. 白色（RGB 均衡且亮度高）
+ 429           * 4. 彩色（红 / 绿 / 蓝）
+ 430           *
+ 431           * @param r   红色通道原始数据
+ 432           * @param g   绿色通道原始数据
+ 433           * @param b   蓝色通道原始数据
+ 434           * @param c   Clear 通道总光强
+ 435           
+ 436           *------------------------------------------------*/
+ 437          Color_t TCS3400_ColorDetect_RGB(uint16 r, uint16 g, uint16 b, uint16 c)
+ 438          {
+ 439   1          if (c < C_DARK_TH) return COLOR_BLACK;
+ 440   1      
+ 441   1          if (Is_Red(r, g, b))      return COLOR_RED;
+ 442   1          if (Is_Green(r, g, b))    return COLOR_GREEN;
+ 443   1          if (Is_Blue(r, g, b))     return COLOR_BLUE;
+ 444   1      
+ 445   1          return COLOR_UNKNOWN;
+ 446   1      }
+ 447          
+ 448          
+ 449          
+ 450          Color_t TCS3400_ColorDetect_WithWLED(uint16 r, uint16 g, uint16 b, uint16 c, uint16 ir)
+ 451          {
+ 452   1          if (c < C_DARK_TH) return COLOR_BLACK;
+ 453   1      
+ 454   1          /* ? 白色LED识别（不等于红外判断，只是识别白光LED） */
+ 455   1          if (Is_WhiteLED(r, g, b, c)) return COLOR_WLED;
+ 456   1      
+ 457   1          /* 其它颜色判断仍然只看RGB */
+ 458   1          if (Is_White(r, g, b, c)) return COLOR_WHITE;
+ 459   1          if (Is_Red(r, g, b))      return COLOR_RED;
+ 460   1          if (Is_Green(r, g, b))    return COLOR_GREEN;
+ 461   1          if (Is_Blue(r, g, b))     return COLOR_BLUE;
+ 462   1      
+ 463   1          return COLOR_UNKNOWN;
+ 464   1      }
+ 465          
+ 466          
+ 467          
+ 468          
+ 469          
+ 470          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1355    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----      16
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----      72
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      1    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

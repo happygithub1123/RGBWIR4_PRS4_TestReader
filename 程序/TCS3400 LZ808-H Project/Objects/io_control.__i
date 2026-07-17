@@ -1,0 +1,1 @@
+"Control\io_control.c" LARGE WARNINGLEVEL (0) OPTIMIZE (8,SPEED) BROWSE INCDIR(.\Hardware;.\System;.\User;.\App) DEBUG OBJECTEXTEND PRINT(.\Listings\io_control.lst) OBJECT(.\Objects\io_control.obj)

@@ -1,0 +1,95 @@
+C51 COMPILER V9.54   PRESSURE_SENSOR_APP                                                   06/29/2026 18:52:19 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE PRESSURE_SENSOR_APP
+OBJECT MODULE PLACED IN App\pressure_sensor_app.OBJ
+COMPILER INVOKED BY: D:\Keil_v5\C51\BIN\C51.EXE App\pressure_sensor_app.c LARGE WARNINGLEVEL(2) INCDIR(.,.\Hardware,.\Sy
+                    -stem,.\User,.\App,.\Control,D:\Keil_v5\C51\INC\STC) OBJECTEXTEND
+
+line level    source
+
+   1          /**
+   2           * @file pressure_sensor_app.c
+   3           * @brief 压力传感器通讯应用层实现
+   4           *
+   5           * @details
+   6           * 本模块面向压力传感器业务：
+   7           *  - 组织后续要发出的 Modbus 指令
+   8           *  - 接收并缓存压力传感器返回帧
+   9           *  - 预留不同压力传感器差异化解析入口
+  10           *
+  11           * 当前阶段只搭建框架，不实现具体寄存器协议。
+  12           */
+  13          
+  14          #include "pressure_sensor_app.h"
+  15          #include "modbus_uart2.h"
+  16          
+  17          /*==============================================================================
+  18           * 宏定义
+  19           *============================================================================*/
+  20          
+  21          #define PRESSURE_SENSOR_FRAME_MAX_SIZE  64
+  22          
+  23          /*==============================================================================
+  24           * 模块内部变量
+  25           *============================================================================*/
+  26          
+  27          static uint8 g_pressure_frame_buf[PRESSURE_SENSOR_FRAME_MAX_SIZE];
+  28          static uint16 g_pressure_frame_len = 0;
+  29          
+  30          /*==============================================================================
+  31           * 对外开放函数实现
+  32           *============================================================================*/
+  33          
+  34          void Pressure_Sensor_App_Init(void)
+  35          {
+  36   1          g_pressure_frame_len = 0;
+  37   1          ModbusUart2_Init();
+  38   1      }
+  39          
+  40          void Pressure_Sensor_App_Poll(void)
+  41          {
+  42   1          ModbusUart2_Poll();
+  43   1      
+  44   1          if (ModbusUart2_GetFrame(g_pressure_frame_buf, &g_pressure_frame_len))
+  45   1          {
+  46   2              Pressure_Sensor_App_ProcessFrame(g_pressure_frame_buf, g_pressure_frame_len);
+  47   2          }
+  48   1      }
+  49          
+  50          bit Pressure_Sensor_App_RequestSample(void)
+  51          {
+  52   1          /*
+  53   1           * 预留压力传感器采样请求接口。
+  54   1           * 具体 Modbus 功能码、站号、寄存器地址待后续型号确定后实现。
+C51 COMPILER V9.54   PRESSURE_SENSOR_APP                                                   06/29/2026 18:52:19 PAGE 2   
+
+  55   1           */
+  56   1          return 0;
+  57   1      }
+  58          
+  59          void Pressure_Sensor_App_ProcessFrame(const uint8 *buf, uint16 len)
+  60          {
+  61   1          /*
+  62   1           * 预留压力传感器返回帧解析入口。
+  63   1           * 当前阶段只搭应用层框架，不处理具体寄存器数据。
+  64   1           */
+  65   1          if ((buf == 0) || (len == 0))
+  66   1          {
+  67   2              return;
+  68   2          }
+  69   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =     76    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =     66       5
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

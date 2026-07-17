@@ -1,0 +1,303 @@
+C51 COMPILER V9.54   I2C_BUS                                                               06/26/2026 17:08:43 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE I2C_BUS
+OBJECT MODULE PLACED IN System\i2c_bus.OBJ
+COMPILER INVOKED BY: D:\Keil_v5\C51\BIN\C51.exe System\i2c_bus.c OPTIMIZE(8) INCDIR(D:\Keil_v5\C51\INC\STC;Hardware;Syst
+                    -em;User;App;Control)
+
+line level    source
+
+   1          #include "i2c_bus.h"
+   2          
+   3          /*------------------------------------------------
+   4           * 4 路软件 I2C 引脚定义
+   5           *------------------------------------------------*/
+   6          
+   7          /* SENSOR_I2C_BUS_1: P2.5(SCL), P2.6(SDA) */
+   8          sbit SENSOR_I2C_SCL1 = P2^5;
+   9          sbit SENSOR_I2C_SDA1 = P2^6;
+  10          
+  11          /* SENSOR_I2C_BUS_2: P4.5(SCL), P4.6(SDA) */
+  12          sbit SENSOR_I2C_SCL2 = P4^5;
+  13          sbit SENSOR_I2C_SDA2 = P4^6;
+  14          
+  15          /* SENSOR_I2C_BUS_3: P0.1(SCL), P0.2(SDA) */
+  16          sbit SENSOR_I2C_SCL3 = P0^1;
+  17          sbit SENSOR_I2C_SDA3 = P0^2;
+  18          
+  19          /* SENSOR_I2C_BUS_4: P0.4(SCL), P5.2(SDA) */
+  20          sbit SENSOR_I2C_SCL4 = P0^4;
+  21          sbit SENSOR_I2C_SDA4 = P5^2;
+  22          
+  23          /*================================================
+  24           * 内部辅助函数：总线引脚控制
+  25           *================================================*/
+  26          
+  27          static void Sensor_I2C_SetSCL(Sensor_I2C_Bus_t bus, bit val)
+  28          {
+  29   1          switch (bus)
+  30   1          {
+  31   2              case SENSOR_I2C_BUS_1: SENSOR_I2C_SCL1 = val; break;
+  32   2              case SENSOR_I2C_BUS_2: SENSOR_I2C_SCL2 = val; break;
+  33   2              case SENSOR_I2C_BUS_3: SENSOR_I2C_SCL3 = val; break;
+  34   2              case SENSOR_I2C_BUS_4: SENSOR_I2C_SCL4 = val; break;
+  35   2          }
+  36   1      }
+  37          
+  38          static void Sensor_I2C_SetSDA(Sensor_I2C_Bus_t bus, bit val)
+  39          {
+  40   1          switch (bus)
+  41   1          {
+  42   2              case SENSOR_I2C_BUS_1: SENSOR_I2C_SDA1 = val; break;
+  43   2              case SENSOR_I2C_BUS_2: SENSOR_I2C_SDA2 = val; break;
+  44   2              case SENSOR_I2C_BUS_3: SENSOR_I2C_SDA3 = val; break;
+  45   2              case SENSOR_I2C_BUS_4: SENSOR_I2C_SDA4 = val; break;
+  46   2          }
+  47   1      }
+  48          
+  49          static bit Sensor_I2C_GetSDA(Sensor_I2C_Bus_t bus)
+  50          {
+  51   1          switch (bus)
+  52   1          {
+  53   2              case SENSOR_I2C_BUS_1: return SENSOR_I2C_SDA1;
+  54   2              case SENSOR_I2C_BUS_2: return SENSOR_I2C_SDA2;
+C51 COMPILER V9.54   I2C_BUS                                                               06/26/2026 17:08:43 PAGE 2   
+
+  55   2              case SENSOR_I2C_BUS_3: return SENSOR_I2C_SDA3;
+  56   2              case SENSOR_I2C_BUS_4: return SENSOR_I2C_SDA4;
+  57   2          }
+  58   1          return 1;
+  59   1      }
+  60          
+  61          static void Sensor_I2C_DelayN(uint8 n)
+  62          {
+  63   1          while (n--) { SENSOR_I2C_NOP(); }
+  64   1      }
+  65          
+  66          /*================================================
+  67           * 传感器 I2C 底层初始化
+  68           *================================================*/
+  69          
+  70          void Sensor_I2C_Init(void)
+  71          {
+  72   1          /* 释放4路I2C总线：SDA/SCL置高，确保总线空闲 */
+  73   1          SENSOR_I2C_SDA1 = 1;
+  74   1          SENSOR_I2C_SCL1 = 1;
+  75   1          SENSOR_I2C_SDA2 = 1;
+  76   1          SENSOR_I2C_SCL2 = 1;
+  77   1          SENSOR_I2C_SDA3 = 1;
+  78   1          SENSOR_I2C_SCL3 = 1;
+  79   1          SENSOR_I2C_SDA4 = 1;
+  80   1          SENSOR_I2C_SCL4 = 1;
+  81   1      }
+  82          
+  83          /*================================================
+  84           * I2C 基本操作
+  85           *================================================*/
+  86          
+  87          void Sensor_I2C_Start(Sensor_I2C_Bus_t bus)
+  88          {
+  89   1          Sensor_I2C_SetSDA(bus, 1);
+  90   1          Sensor_I2C_SetSCL(bus, 1);
+  91   1          Sensor_I2C_DelayN(SENSOR_I2C_T_SU_STA);
+  92   1          Sensor_I2C_SetSDA(bus, 0);
+  93   1          Sensor_I2C_DelayN(SENSOR_I2C_T_HD_STA);
+  94   1          Sensor_I2C_SetSCL(bus, 0);
+  95   1      }
+  96          
+  97          void Sensor_I2C_Stop(Sensor_I2C_Bus_t bus)
+  98          {
+  99   1          Sensor_I2C_SetSDA(bus, 0);
+ 100   1          Sensor_I2C_DelayN(SENSOR_I2C_T_HD_DAT);
+ 101   1          Sensor_I2C_SetSCL(bus, 1);
+ 102   1          Sensor_I2C_DelayN(SENSOR_I2C_T_SU_STO);
+ 103   1          Sensor_I2C_SetSDA(bus, 1);
+ 104   1          Sensor_I2C_DelayN(SENSOR_I2C_T_BUF);
+ 105   1      }
+ 106          
+ 107          bit Sensor_I2C_WaitAck(Sensor_I2C_Bus_t bus)
+ 108          {
+ 109   1          Sensor_I2C_SetSDA(bus, 1);
+ 110   1          Sensor_I2C_DelayN(SENSOR_I2C_T_HD_DAT);
+ 111   1          Sensor_I2C_SetSCL(bus, 1);
+ 112   1          Sensor_I2C_DelayN(SENSOR_I2C_T_HIGH);
+ 113   1          if (Sensor_I2C_GetSDA(bus)) {
+ 114   2              Sensor_I2C_SetSCL(bus, 0);
+ 115   2              Sensor_I2C_DelayN(SENSOR_I2C_T_LOW);
+ 116   2              return 1;
+C51 COMPILER V9.54   I2C_BUS                                                               06/26/2026 17:08:43 PAGE 3   
+
+ 117   2          }
+ 118   1          Sensor_I2C_SetSCL(bus, 0);
+ 119   1          Sensor_I2C_DelayN(SENSOR_I2C_T_LOW);
+ 120   1          return 0;
+ 121   1      }
+ 122          
+ 123          void Sensor_I2C_Ack(Sensor_I2C_Bus_t bus)
+ 124          {
+ 125   1          Sensor_I2C_SetSDA(bus, 0);
+ 126   1          Sensor_I2C_DelayN(SENSOR_I2C_T_SU_DAT);
+ 127   1          Sensor_I2C_SetSCL(bus, 1);
+ 128   1          Sensor_I2C_DelayN(SENSOR_I2C_T_HIGH);
+ 129   1          Sensor_I2C_SetSCL(bus, 0);
+ 130   1          Sensor_I2C_DelayN(SENSOR_I2C_T_LOW);
+ 131   1          Sensor_I2C_SetSDA(bus, 1);
+ 132   1      }
+ 133          
+ 134          void Sensor_I2C_NAck(Sensor_I2C_Bus_t bus)
+ 135          {
+ 136   1          Sensor_I2C_SetSDA(bus, 1);
+ 137   1          Sensor_I2C_DelayN(SENSOR_I2C_T_SU_DAT);
+ 138   1          Sensor_I2C_SetSCL(bus, 1);
+ 139   1          Sensor_I2C_DelayN(SENSOR_I2C_T_HIGH);
+ 140   1          Sensor_I2C_SetSCL(bus, 0);
+ 141   1          Sensor_I2C_DelayN(SENSOR_I2C_T_LOW);
+ 142   1      }
+ 143          
+ 144          void Sensor_I2C_SendByte(Sensor_I2C_Bus_t bus, uint8 dat)
+ 145          {
+ 146   1          uint8 i;
+ 147   1          for (i = 0; i < 8; i++) {
+ 148   2              Sensor_I2C_SetSDA(bus, (dat & 0x80) ? 1 : 0);
+ 149   2              Sensor_I2C_DelayN(SENSOR_I2C_T_SU_DAT);
+ 150   2              Sensor_I2C_SetSCL(bus, 1);
+ 151   2              Sensor_I2C_DelayN(SENSOR_I2C_T_HIGH);
+ 152   2              Sensor_I2C_SetSCL(bus, 0);
+ 153   2              Sensor_I2C_DelayN(SENSOR_I2C_T_LOW);
+ 154   2              dat <<= 1;
+ 155   2          }
+ 156   1          /* 发送完成后释放 SDA，便于从机输出 ACK */
+ 157   1          Sensor_I2C_SetSDA(bus, 1);
+ 158   1      }
+ 159          
+ 160          uint8 Sensor_I2C_ReadByte(Sensor_I2C_Bus_t bus)
+ 161          {
+ 162   1          uint8 i, dat = 0;
+ 163   1          Sensor_I2C_SetSDA(bus, 1);
+ 164   1          for (i = 0; i < 8; i++) {
+ 165   2              Sensor_I2C_SetSCL(bus, 0);
+ 166   2              Sensor_I2C_DelayN(SENSOR_I2C_T_LOW);
+ 167   2              Sensor_I2C_SetSCL(bus, 1);
+ 168   2              Sensor_I2C_DelayN(SENSOR_I2C_T_HIGH / 2);
+ 169   2              dat <<= 1;
+ 170   2              if (Sensor_I2C_GetSDA(bus)) dat |= 0x01;
+ 171   2              Sensor_I2C_DelayN(SENSOR_I2C_T_HIGH - SENSOR_I2C_T_HIGH / 2);
+ 172   2          }
+ 173   1          Sensor_I2C_SetSCL(bus, 0);
+ 174   1          Sensor_I2C_DelayN(SENSOR_I2C_T_LOW);
+ 175   1          return dat;
+ 176   1      }
+ 177          
+ 178          /*================================================
+C51 COMPILER V9.54   I2C_BUS                                                               06/26/2026 17:08:43 PAGE 4   
+
+ 179           * I2C 寄存器读写
+ 180           *================================================*/
+ 181          
+ 182          bit Sensor_I2C_WriteReg(Sensor_I2C_Bus_t bus,
+ 183                                  uint8 dev, uint8 reg,
+ 184                                  uint8 dat)
+ 185          {
+ 186   1          uint8 retry;
+ 187   1          for (retry = 0; retry <= 1; retry++)
+ 188   1          {
+ 189   2              Sensor_I2C_Start(bus);
+ 190   2              Sensor_I2C_SendByte(bus, dev << 1);
+ 191   2              if (Sensor_I2C_WaitAck(bus)) { Sensor_I2C_Stop(bus); continue; }
+ 192   2              Sensor_I2C_SendByte(bus, reg);
+ 193   2              if (Sensor_I2C_WaitAck(bus)) { Sensor_I2C_Stop(bus); continue; }
+ 194   2              Sensor_I2C_SendByte(bus, dat);
+ 195   2              if (Sensor_I2C_WaitAck(bus)) { Sensor_I2C_Stop(bus); continue; }
+ 196   2              Sensor_I2C_Stop(bus);
+ 197   2              return 1;
+ 198   2          }
+ 199   1          Sensor_I2C_Stop(bus);
+ 200   1          return 0;
+ 201   1      }
+ 202          
+ 203          uint8 Sensor_I2C_ReadReg(Sensor_I2C_Bus_t bus,
+ 204                                   uint8 dev, uint8 reg)
+ 205          {
+ 206   1          uint8 dat;
+ 207   1          Sensor_I2C_Start(bus);
+ 208   1          Sensor_I2C_SendByte(bus, dev << 1);
+ 209   1          Sensor_I2C_WaitAck(bus);
+ 210   1          Sensor_I2C_SendByte(bus, reg);
+ 211   1          Sensor_I2C_WaitAck(bus);
+ 212   1          Sensor_I2C_Start(bus);
+ 213   1          Sensor_I2C_SendByte(bus, (dev << 1) | 1);
+ 214   1          Sensor_I2C_WaitAck(bus);
+ 215   1          dat = Sensor_I2C_ReadByte(bus);
+ 216   1          Sensor_I2C_NAck(bus);
+ 217   1          Sensor_I2C_Stop(bus);
+ 218   1          return dat;
+ 219   1      }
+ 220          
+ 221          bit Sensor_I2C_ReadRegValue(Sensor_I2C_Bus_t bus,
+ 222                                      uint8 dev, uint8 reg,
+ 223                                      uint8 *value)
+ 224          {
+ 225   1          if (value == 0) return 0;
+ 226   1          return Sensor_I2C_ReadRegs(bus, dev, reg, value, 1);
+ 227   1      }
+ 228          
+ 229          bit Sensor_I2C_ReadRegs(Sensor_I2C_Bus_t bus,
+ 230                                  uint8 dev, uint8 reg,
+ 231                                  uint8 *buf, uint8 len)
+ 232          {
+ 233   1          uint8 i;
+ 234   1          if ((buf == 0) || (len == 0)) return 0;
+ 235   1      
+ 236   1          Sensor_I2C_Start(bus);
+ 237   1          Sensor_I2C_SendByte(bus, dev << 1);
+ 238   1          if (Sensor_I2C_WaitAck(bus)) { Sensor_I2C_Stop(bus); return 0; }
+ 239   1          Sensor_I2C_SendByte(bus, reg);
+ 240   1          if (Sensor_I2C_WaitAck(bus)) { Sensor_I2C_Stop(bus); return 0; }
+C51 COMPILER V9.54   I2C_BUS                                                               06/26/2026 17:08:43 PAGE 5   
+
+ 241   1          Sensor_I2C_Start(bus);
+ 242   1          Sensor_I2C_SendByte(bus, (dev << 1) | 1);
+ 243   1          if (Sensor_I2C_WaitAck(bus)) { Sensor_I2C_Stop(bus); return 0; }
+ 244   1          for (i = 0; i < len; i++) {
+ 245   2              buf[i] = Sensor_I2C_ReadByte(bus);
+ 246   2              if (i == (len - 1)) Sensor_I2C_NAck(bus);
+ 247   2              else Sensor_I2C_Ack(bus);
+ 248   2          }
+ 249   1          Sensor_I2C_Stop(bus);
+ 250   1          return 1;
+ 251   1      }
+ 252          
+ 253          bit Sensor_I2C_WriteRegs(Sensor_I2C_Bus_t bus,
+ 254                                   uint8 dev, uint8 reg,
+ 255                                   uint8 *buf, uint8 len)
+ 256          {
+ 257   1          uint8 i;
+ 258   1          if ((buf == 0) || (len == 0)) return 0;
+ 259   1      
+ 260   1          Sensor_I2C_Start(bus);
+ 261   1          Sensor_I2C_SendByte(bus, dev << 1);
+ 262   1          if (Sensor_I2C_WaitAck(bus)) { Sensor_I2C_Stop(bus); return 0; }
+ 263   1          Sensor_I2C_SendByte(bus, reg);
+ 264   1          if (Sensor_I2C_WaitAck(bus)) { Sensor_I2C_Stop(bus); return 0; }
+ 265   1          for (i = 0; i < len; i++) {
+ 266   2              Sensor_I2C_SendByte(bus, buf[i]);
+ 267   2              if (Sensor_I2C_WaitAck(bus)) { Sensor_I2C_Stop(bus); return 0; }
+ 268   2          }
+ 269   1          Sensor_I2C_Stop(bus);
+ 270   1          return 1;
+ 271   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    877    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----      27
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----       2
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

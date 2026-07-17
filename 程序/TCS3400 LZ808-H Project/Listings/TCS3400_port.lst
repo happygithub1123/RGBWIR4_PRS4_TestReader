@@ -1,0 +1,169 @@
+C51 COMPILER V9.54   TCS3400_PORT                                                          01/29/2026 10:42:10 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE TCS3400_PORT
+OBJECT MODULE PLACED IN .\Objects\TCS3400_port.obj
+COMPILER INVOKED BY: D:\Keil_v5\C51\BIN\C51.EXE Hardware\TCS3400_port.c WARNINGLEVEL(0) OPTIMIZE(8,SPEED) BROWSE INCDIR(
+                    -.\Hardware;.\System;.\User) DEBUG OBJECTEXTEND PRINT(.\Listings\TCS3400_port.lst) OBJECT(.\Objects\TCS3400_port.obj)
+
+line level    source
+
+   1          #include "TCS3400_port.h"
+   2          #include <string.h>   
+   3          
+   4          
+   5          /*------------------------------------------------
+   6           * @brief 通过串口打印颜色识别结果字符串
+   7           *
+   8           * @param color 颜色识别结果枚举值（Color_t）
+   9           *
+  10           * 示例：
+  11           *   Uart_PrintColor(COLOR_WHITE);  // 输出 "WHITE"
+  12           *   Uart_PrintColor(COLOR_RED);    // 输出 "RED"
+  13           *------------------------------------------------*/
+  14          void Uart_PrintColor(Color_t color)
+  15          {
+  16   1          switch (color)
+  17   1          {
+  18   2              case COLOR_BLACK:  Uart_SendStr("BLACK");     break;
+  19   2              case COLOR_WHITE:  Uart_SendStr("WHITE");     break;  // ← 恢复这行
+  20   2              case COLOR_WLED:   Uart_SendStr("WHITE_LED"); break;
+  21   2              case COLOR_RED:    Uart_SendStr("RED");       break;
+  22   2              case COLOR_GREEN:  Uart_SendStr("GREEN");     break;
+  23   2              case COLOR_BLUE:   Uart_SendStr("BLUE");      break;
+  24   2              default:           Uart_SendStr("UNKNOWN");   break;
+  25   2          }
+  26   1      }
+  27          
+  28          
+  29          /*------------------------------------------------
+  30           * @brief 串口打印 R G B C IR 数据
+  31           * 格式示例：
+  32           * R=1234 G=2345 B=3456 C=4567 IR=567
+  33           *------------------------------------------------*/
+  34          void Uart_Print_RGBCIR(unsigned int r,
+  35                                 unsigned int g,
+  36                                 unsigned int b,
+  37                                 unsigned int c,
+  38                                 unsigned int ir)
+  39          {
+  40   1          Uart_SendStr("R=");
+  41   1          Uart_PrintUint16(r);
+  42   1      
+  43   1          Uart_SendStr(" G=");
+  44   1          Uart_PrintUint16(g);
+  45   1      
+  46   1          Uart_SendStr(" B=");
+  47   1          Uart_PrintUint16(b);
+  48   1      
+  49   1          Uart_SendStr(" C=");
+  50   1          Uart_PrintUint16(c);
+  51   1      
+  52   1          Uart_SendStr(" IR=");
+  53   1          Uart_PrintUint16(ir);
+  54   1      
+C51 COMPILER V9.54   TCS3400_PORT                                                          01/29/2026 10:42:10 PAGE 2   
+
+  55   1          Uart_SendStr("\r\n");
+  56   1      }
+  57          
+  58          
+  59          
+  60          
+  61          
+  62          
+  63          
+  64          
+  65          
+  66          /* ================= 指令协议 ================= */
+  67          
+  68          
+  69          //void TCS3400_Port_HandleCmd(const char* cmd)
+  70          //{
+  71          //    uint16 r,g,b,c,ir;
+  72          
+  73          //    if(strcmp(cmd, "R")==0)
+  74          //    {
+  75          //        // 推荐：读一帧，拿R（保证一致性）
+  76          //        if(TCS3400_ReadRGBC(&r,&g,&b,&c))
+  77          //        {
+  78          //            Uart_SendStr("R=");
+  79          //            Uart_PrintUint16(r);
+  80          //            Uart_SendStr("\r\n");
+  81          //        }
+  82          //        else Uart_SendStr("ERR\r\n");
+  83          //    }
+  84          //    else if(strcmp(cmd, "G")==0)
+  85          //    {
+  86          //        if(TCS3400_ReadRGBC(&r,&g,&b,&c))
+  87          //        {
+  88          //            Uart_SendStr("G="); Uart_PrintUint16(g); Uart_SendStr("\r\n");
+  89          //        }
+  90          //        else Uart_SendStr("ERR\r\n");
+  91          //    }
+  92          //    else if(strcmp(cmd, "B")==0)
+  93          //    {
+  94          //        if(TCS3400_ReadRGBC(&r,&g,&b,&c))
+  95          //        {
+  96          //            Uart_SendStr("B="); Uart_PrintUint16(b); Uart_SendStr("\r\n");
+  97          //        }
+  98          //        else Uart_SendStr("ERR\r\n");
+  99          //    }
+ 100          //    else if(strcmp(cmd, "C")==0)
+ 101          //    {
+ 102          //        if(TCS3400_ReadRGBC(&r,&g,&b,&c))
+ 103          //        {
+ 104          //            Uart_SendStr("C="); Uart_PrintUint16(c); Uart_SendStr("\r\n");
+ 105          //        }
+ 106          //        else Uart_SendStr("ERR\r\n");
+ 107          //    }
+ 108          //    else if(strcmp(cmd, "IR")==0)
+ 109          //    {
+ 110          //        // 两种做法二选一：
+ 111          //        // A) 如果你驱动对外提供 TCS3400_ReadIR()
+ 112          //        // if(TCS3400_ReadIR(&ir)) { ... }
+ 113          
+ 114          //        // B) 统一走 ReadRaw（更稳定）
+ 115          //        if(TCS3400_ReadRaw(&r,&g,&b,&c,&ir))
+ 116          //        {
+C51 COMPILER V9.54   TCS3400_PORT                                                          01/29/2026 10:42:10 PAGE 3   
+
+ 117          //            Uart_SendStr("IR="); Uart_PrintUint16(ir); Uart_SendStr("\r\n");
+ 118          //        }
+ 119          //        else Uart_SendStr("ERR\r\n");
+ 120          //    }
+ 121          //    else if(strcmp(cmd, "RGBC")==0)
+ 122          //    {
+ 123          //        if(TCS3400_ReadRGBC(&r,&g,&b,&c))
+ 124          //        {
+ 125          //            Uart_Print_RGBCIR(r,g,b,c,0); // 或者你自己打印 RGBC
+ 126          //        }
+ 127          //        else Uart_SendStr("ERR\r\n");
+ 128          //    }
+ 129          //    else if(strcmp(cmd, "ALL")==0)
+ 130          //    {
+ 131          //        if(TCS3400_ReadRaw(&r,&g,&b,&c,&ir))
+ 132          //        {
+ 133          //            Uart_Print_RGBCIR(r,g,b,c,ir);
+ 134          //        }
+ 135          //        else Uart_SendStr("ERR\r\n");
+ 136          //    }
+ 137          //    else
+ 138          //    {
+ 139          //        Uart_SendStr("CMD?\r\n");
+ 140          //    }
+ 141          //}
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    179    ----
+   CONSTANT SIZE    =     68    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----      10
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

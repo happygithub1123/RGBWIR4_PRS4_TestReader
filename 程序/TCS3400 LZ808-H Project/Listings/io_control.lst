@@ -1,0 +1,94 @@
+C51 COMPILER V9.54   IO_CONTROL                                                            06/23/2026 15:23:19 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE IO_CONTROL
+OBJECT MODULE PLACED IN .\Objects\io_control.obj
+COMPILER INVOKED BY: D:\Keil_v5\C51\BIN\C51.EXE Control\io_control.c LARGE WARNINGLEVEL(0) OPTIMIZE(8,SPEED) BROWSE INCD
+                    -IR(.\Hardware;.\System;.\User;.\App) DEBUG OBJECTEXTEND PRINT(.\Listings\io_control.lst) OBJECT(.\Objects\io_control.obj
+                    -)
+
+line level    source
+
+   1          #include "action_control.h"
+   2          
+   3          /* Y输出引脚定义 */
+   4          sbit Y1_PIN = P3^2;
+*** ERROR C202 IN LINE 4 OF Control\io_control.c: 'P3': undefined identifier
+   5          sbit Y2_PIN = P3^3;
+*** ERROR C202 IN LINE 5 OF Control\io_control.c: 'P3': undefined identifier
+   6          sbit Y3_PIN = P3^4;
+*** ERROR C202 IN LINE 6 OF Control\io_control.c: 'P3': undefined identifier
+   7          sbit Y4_PIN = P5^0;
+*** ERROR C202 IN LINE 7 OF Control\io_control.c: 'P5': undefined identifier
+   8          
+   9          /**
+  10           * @brief 控制指定Y输出
+  11           * @param yn    Y1~Y4
+  12           * @param state Y_ON或Y_OFF
+  13           */
+  14          void Yn_Control(unsigned char yn, unsigned char state)
+  15          {
+  16   1          switch(yn)
+  17   1          {
+  18   2              case Y1:
+*** ERROR C202 IN LINE 18 OF Control\io_control.c: 'Y1': undefined identifier
+  19   2                  Y1_PIN = state;
+*** ERROR C202 IN LINE 19 OF Control\io_control.c: 'Y1_PIN': undefined identifier
+  20   2                  break;
+  21   2      
+  22   2              case Y2:
+*** ERROR C202 IN LINE 22 OF Control\io_control.c: 'Y2': undefined identifier
+  23   2                  Y2_PIN = state;
+*** ERROR C202 IN LINE 23 OF Control\io_control.c: 'Y2_PIN': undefined identifier
+  24   2                  break;
+  25   2      
+  26   2              case Y3:
+*** ERROR C202 IN LINE 26 OF Control\io_control.c: 'Y3': undefined identifier
+  27   2                  Y3_PIN = state;
+*** ERROR C202 IN LINE 27 OF Control\io_control.c: 'Y3_PIN': undefined identifier
+  28   2                  break;
+  29   2      
+  30   2              case Y4:
+*** ERROR C202 IN LINE 30 OF Control\io_control.c: 'Y4': undefined identifier
+  31   2                  Y4_PIN = state;
+*** ERROR C202 IN LINE 31 OF Control\io_control.c: 'Y4_PIN': undefined identifier
+  32   2                  break;
+  33   2      
+  34   2              default:
+  35   2                  break;
+  36   2          }
+  37   1      }
+  38          
+  39          /**
+  40           * @brief 全部开启
+  41           */
+C51 COMPILER V9.54   IO_CONTROL                                                            06/23/2026 15:23:19 PAGE 2   
+
+  42          void Y_AllOn(void)
+  43          {
+  44   1          Y1_PIN = Y_ON;
+*** ERROR C202 IN LINE 44 OF Control\io_control.c: 'Y1_PIN': undefined identifier
+  45   1          Y2_PIN = Y_ON;
+*** ERROR C202 IN LINE 45 OF Control\io_control.c: 'Y2_PIN': undefined identifier
+  46   1          Y3_PIN = Y_ON;
+*** ERROR C202 IN LINE 46 OF Control\io_control.c: 'Y3_PIN': undefined identifier
+  47   1          Y4_PIN = Y_ON;
+*** ERROR C202 IN LINE 47 OF Control\io_control.c: 'Y4_PIN': undefined identifier
+  48   1      }
+  49          
+  50          /**
+  51           * @brief 全部关闭
+  52           */
+  53          void Y_AllOff(void)
+  54          {
+  55   1          Y1_PIN = Y_OFF;
+*** ERROR C202 IN LINE 55 OF Control\io_control.c: 'Y1_PIN': undefined identifier
+  56   1          Y2_PIN = Y_OFF;
+*** ERROR C202 IN LINE 56 OF Control\io_control.c: 'Y2_PIN': undefined identifier
+  57   1          Y3_PIN = Y_OFF;
+*** ERROR C202 IN LINE 57 OF Control\io_control.c: 'Y3_PIN': undefined identifier
+  58   1          Y4_PIN = Y_OFF;
+*** ERROR C202 IN LINE 58 OF Control\io_control.c: 'Y4_PIN': undefined identifier
+  59   1      }
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  20 ERROR(S)

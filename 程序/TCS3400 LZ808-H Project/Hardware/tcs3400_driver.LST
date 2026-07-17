@@ -1,0 +1,886 @@
+C51 COMPILER V9.54   TCS3400_DRIVER                                                        06/29/2026 18:52:57 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE TCS3400_DRIVER
+OBJECT MODULE PLACED IN Hardware\tcs3400_driver.OBJ
+COMPILER INVOKED BY: D:\Keil_v5\C51\BIN\C51.EXE Hardware\tcs3400_driver.c LARGE WARNINGLEVEL(2) INCDIR(.,.\Hardware,.\Sy
+                    -stem,.\User,.\App,.\Control,D:\Keil_v5\C51\INC\STC) OBJECTEXTEND
+
+line level    source
+
+   1          /**
+   2           * @file tcs3400_driver.c
+   3           * @brief TCS3400 颜色传感器底层驱动实现
+   4           *
+   5           * @details
+   6           * 本模块负责 TCS3400 的寄存器访问、初始化、积分时间配置、
+   7           * 增益配置、数据有效状态检测，以及 RGBC 和 IR 原始数据读取。
+   8           */
+   9          
+  10          #include "tcs3400_driver.h"
+  11          #include "i2c_bus.h"
+  12          
+  13          /*==============================================================================
+  14           * 模块内部宏定义
+  15           *============================================================================*/
+  16          
+  17          #define TCS3400_AUTOINC  0x20                              /**< 寄存器地址自动递增命令位，当
+             -前代码暂未使用 */
+  18          #define U16_LE(lo, hi)    (((uint16)(hi) << 8) | (lo))     /**< 将低字节和高字节组合成 16 位�
+             -�端数值 */
+  19          
+  20          /*==============================================================================
+  21           * 模块内部变量
+  22           *============================================================================*/
+  23          
+  24          /** 各路 TCS3400 当前配置对应的帧等待时间，单位 ms */
+  25          static uint16 g_tcs3400_frame_wait_ms[4] = {183, 183, 183, 183};
+  26          
+  27          /*==============================================================================
+  28           * 模块内部函数声明
+  29           *============================================================================*/
+  30          
+  31          static bit TCS_Write8(I2C_Bus_t bus, uint8 reg, uint8 val);
+  32          static uint8 TCS_Read8(I2C_Bus_t bus, uint8 reg);
+  33          static bit TCS_Read8Value(I2C_Bus_t bus, uint8 reg, uint8 *value);
+  34          static bit TCS_Read16Value(I2C_Bus_t bus, uint8 reg_low, uint16 *value);
+  35          static uint16 TCS_Read16(I2C_Bus_t bus, uint8 reg_low);
+  36          static uint16 TCS3400_CalcCycles(uint16 time_ms);
+  37          static bit TCS3400_WaitValid(I2C_Bus_t bus);
+  38          
+  39          /*==============================================================================
+  40           * 模块内部函数实现
+  41           *============================================================================*/
+  42          
+  43          /**
+  44           * @brief 向 TCS3400 写入一个 8 位寄存器
+  45           * @param[in] bus 目标软件 I2C 总线
+  46           * @param[in] reg 目标寄存器地址
+  47           * @param[in] val 待写入的寄存器值
+  48           * @return 1=I2C 写入成功，0=I2C 写入失败
+  49           */
+  50          static bit TCS_Write8(I2C_Bus_t bus, uint8 reg, uint8 val)
+  51          {
+  52   1          return Sensor_I2C_WriteReg(bus,
+C51 COMPILER V9.54   TCS3400_DRIVER                                                        06/29/2026 18:52:57 PAGE 2   
+
+  53   1                                     TCS3400_I2C_ADDR_7BIT,
+  54   1                                     reg,
+  55   1                                     val);
+  56   1      }
+  57          
+  58          /**
+  59           * @brief 读取 TCS3400 的一个 8 位寄存器
+  60           * @param[in] bus 目标软件 I2C 总线
+  61           * @param[in] reg 目标寄存器地址
+  62           * @return 读取到的寄存器值
+  63           * @note 该兼容接口不返回 I2C ACK 状态。
+  64           */
+  65          static uint8 TCS_Read8(I2C_Bus_t bus, uint8 reg)
+  66          {
+  67   1          return Sensor_I2C_ReadReg(bus,
+  68   1                                    TCS3400_I2C_ADDR_7BIT,
+  69   1                                    reg);
+  70   1      }
+  71          
+  72          /**
+  73           * @brief 读取 TCS3400 的一个 8 位寄存器并检查通信状态
+  74           * @param[in] bus 目标软件 I2C 总线
+  75           * @param[in] reg 目标寄存器地址
+  76           * @param[out] value 返回读取到的寄存器值
+  77           * @return 1=I2C 读取成功，0=I2C 读取失败
+  78           */
+  79          static bit TCS_Read8Value(I2C_Bus_t bus,
+  80                                    uint8 reg,
+  81                                    uint8 *value)
+  82          {
+  83   1          return Sensor_I2C_ReadRegValue(bus,
+  84   1                                         TCS3400_I2C_ADDR_7BIT,
+  85   1                                         reg,
+  86   1                                         value);
+  87   1      }
+  88          
+  89          /**
+  90           * @brief 从连续的低、高字节寄存器读取一个 16 位数值
+  91           * @param[in] bus 目标软件 I2C 总线
+  92           * @param[in] reg_low 低字节寄存器地址
+  93           * @param[out] value 返回组合后的 16 位数值
+  94           * @return 1=输出指针有效并完成读取，0=输出指针为空
+  95           * @note 当前实现通过 TCS_Read8() 分两次读取，不能反馈 I2C ACK 错误。
+  96           */
+  97          static bit TCS_Read16Value(I2C_Bus_t bus,
+  98                                     uint8 reg_low,
+  99                                     uint16 *value)
+ 100          {
+ 101   1          uint8 d0;
+ 102   1          uint8 d1;
+ 103   1      
+ 104   1          if (value == 0)
+ 105   1          {
+ 106   2              return 0;
+ 107   2          }
+ 108   1      
+ 109   1          d0 = TCS_Read8(bus, reg_low);
+ 110   1          d1 = TCS_Read8(bus, reg_low + 1);
+ 111   1      
+ 112   1          *value = ((uint16)d1 << 8) | d0;
+ 113   1      
+ 114   1          return 1;
+C51 COMPILER V9.54   TCS3400_DRIVER                                                        06/29/2026 18:52:57 PAGE 3   
+
+ 115   1      }
+ 116          
+ 117          /**
+ 118           * @brief 从连续的低、高字节寄存器读取一个 16 位数值
+ 119           * @param[in] bus 目标软件 I2C 总线
+ 120           * @param[in] reg_low 低字节寄存器地址
+ 121           * @return 读取并组合后的 16 位数值
+ 122           * @note 当前接口不反馈 I2C ACK 错误。
+ 123           */
+ 124          static uint16 TCS_Read16(I2C_Bus_t bus, uint8 reg_low)
+ 125          {
+ 126   1          uint8 low;
+ 127   1          uint8 high;
+ 128   1      
+ 129   1          low = TCS_Read8(bus, reg_low);
+ 130   1          high = TCS_Read8(bus, reg_low + 1);
+ 131   1      
+ 132   1          return ((uint16)high << 8) | low;
+ 133   1      }
+ 134          
+ 135          /**
+ 136           * @brief 将积分时间换算为 TCS3400 ADC 积分周期数
+ 137           * @param[in] time_ms 目标积分时间，单位 ms
+ 138           * @return ADC 积分周期数，范围为 1～256
+ 139           * @note 输入积分时间会被限制在 3～712 ms。
+ 140           */
+ 141          static uint16 TCS3400_CalcCycles(uint16 time_ms)
+ 142          {
+ 143   1          uint32 temp;
+ 144   1          uint16 cycles;
+ 145   1      
+ 146   1          if (time_ms < 3)
+ 147   1          {
+ 148   2              time_ms = 3;
+ 149   2          }
+ 150   1      
+ 151   1          if (time_ms > 712)
+ 152   1          {
+ 153   2              time_ms = 712;
+ 154   2          }
+ 155   1      
+ 156   1          /* 常用积分时间使用固定周期数，避免换算误差 */
+ 157   1          if (time_ms == 28)
+ 158   1          {
+ 159   2              return 10;
+ 160   2          }
+ 161   1      
+ 162   1          if (time_ms == 103)
+ 163   1          {
+ 164   2              return 37;
+ 165   2          }
+ 166   1      
+ 167   1          if (time_ms == 178)
+ 168   1          {
+ 169   2              return 64;
+ 170   2          }
+ 171   1      
+ 172   1          if (time_ms == 712)
+ 173   1          {
+ 174   2              return 256;
+ 175   2          }
+ 176   1      
+C51 COMPILER V9.54   TCS3400_DRIVER                                                        06/29/2026 18:52:57 PAGE 4   
+
+ 177   1          /*
+ 178   1           * 每个积分周期约为 2.78 ms。
+ 179   1           * 加 277 后进行整数除法，相当于向上取整。
+ 180   1           */
+ 181   1          temp = ((uint32)time_ms * 100UL) + 277UL;
+ 182   1          cycles = (uint16)(temp / 278UL);
+ 183   1      
+ 184   1          if (cycles < 1)
+ 185   1          {
+ 186   2              cycles = 1;
+ 187   2          }
+ 188   1      
+ 189   1          if (cycles > 256)
+ 190   1          {
+ 191   2              cycles = 256;
+ 192   2          }
+ 193   1      
+ 194   1          return cycles;
+ 195   1      }
+ 196          
+ 197          /**
+ 198           * @brief 等待旧数据失效并等待一帧新数据变为有效
+ 199           * @param[in] bus 目标软件 I2C 总线
+ 200           * @return 1=检测到新的有效数据，0=通信失败或等待超时
+ 201           * @note 本函数包含 Delay_ms(2) 阻塞延时。
+ 202           */
+ 203          static bit TCS3400_WaitValid(I2C_Bus_t bus)
+ 204          {
+ 205   1          uint16 t;
+ 206   1          uint16 timeout;
+ 207   1          uint8 status;
+ 208   1      
+ 209   1          timeout = (g_tcs3400_frame_wait_ms[(uint8)bus] / 2) + 20;
+ 210   1      
+ 211   1          /*
+ 212   1           * 第一阶段：
+ 213   1           * 等待上一帧的 AVALID 清零，避免读取旧数据。
+ 214   1           */
+ 215   1          t = timeout;
+ 216   1      
+ 217   1          while (t--)
+ 218   1          {
+ 219   2              if (!TCS_Read8Value(bus, TCS3400_STATUS, &status))
+ 220   2              {
+ 221   3                  return 0;
+ 222   3              }
+ 223   2      
+ 224   2              if ((status & TCS3400_STATUS_AVALID) == 0)
+ 225   2              {
+ 226   3                  break;
+ 227   3              }
+ 228   2      
+ 229   2              Delay_ms(2);
+ 230   2          }
+ 231   1      
+ 232   1          /*
+ 233   1           * 第二阶段：
+ 234   1           * 等待新一帧的 AVALID 置位。
+ 235   1           */
+ 236   1          t = timeout;
+ 237   1      
+ 238   1          while (t--)
+C51 COMPILER V9.54   TCS3400_DRIVER                                                        06/29/2026 18:52:57 PAGE 5   
+
+ 239   1          {
+ 240   2              if (!TCS_Read8Value(bus, TCS3400_STATUS, &status))
+ 241   2              {
+ 242   3                  return 0;
+ 243   3              }
+ 244   2      
+ 245   2              if (status & TCS3400_STATUS_AVALID)
+ 246   2              {
+ 247   3                  return 1;
+ 248   3              }
+ 249   2      
+ 250   2              Delay_ms(2);
+ 251   2          }
+ 252   1      
+ 253   1          return 0;
+ 254   1      }
+ 255          
+ 256          /*==============================================================================
+ 257           * 对外开放函数实现
+ 258           *============================================================================*/
+ 259          
+ 260          /**
+ 261           * @brief 初始化指定总线上的 TCS3400
+ 262           * @param[in] bus 目标软件 I2C 总线
+ 263           * @return 1=初始化成功，0=任意寄存器写入失败
+ 264           */
+ 265          bit TCS3400_Init(I2C_Bus_t bus)
+ 266          {
+ 267   1          /* 开启芯片电源 */
+ 268   1          if (!TCS_Write8(bus,
+ 269   1                          TCS3400_ENABLE,
+ 270   1                          TCS3400_EN_PON))
+ 271   1          {
+ 272   2              return 0;
+ 273   2          }
+ 274   1      
+ 275   1          /* 等待芯片上电稳定 */
+ 276   1          Delay_ms(3);
+ 277   1      
+ 278   1          /* 设置默认积分时间为 178 ms */
+ 279   1          if (!TCS3400_SetIntegrationTime(bus, 178))
+ 280   1          {
+ 281   2              return 0;
+ 282   2          }
+ 283   1      
+ 284   1          /* 设置默认模拟增益 */
+ 285   1          if (!TCS3400_SetGain(bus, TCS3400_DEFAULT_GAIN))
+ 286   1          {
+ 287   2              return 0;
+ 288   2          }
+ 289   1      
+ 290   1          /* 开启芯片电源和 RGBC ADC */
+ 291   1          if (!TCS_Write8(bus,
+ 292   1                          TCS3400_ENABLE,
+ 293   1                          TCS3400_EN_PON | TCS3400_EN_AEN))
+ 294   1          {
+ 295   2              return 0;
+ 296   2          }
+ 297   1      
+ 298   1          return 1;
+ 299   1      }
+ 300          
+C51 COMPILER V9.54   TCS3400_DRIVER                                                        06/29/2026 18:52:57 PAGE 6   
+
+ 301          /**
+ 302           * @brief 将积分时间换算为 ATIME 寄存器值
+ 303           * @param[in] time_ms 目标积分时间，单位 ms
+ 304           * @return ATIME 寄存器值
+ 305           */
+ 306          uint8 TCS3400_CalcATIME(uint16 time_ms)
+ 307          {
+ 308   1          uint16 cycles;
+ 309   1      
+ 310   1          cycles = TCS3400_CalcCycles(time_ms);
+ 311   1      
+ 312   1          return (uint8)(256 - cycles);
+ 313   1      }
+ 314          
+ 315          /**
+ 316           * @brief 设置 TCS3400 的积分时间
+ 317           * @param[in] bus 目标软件 I2C 总线
+ 318           * @param[in] time_ms 目标积分时间，单位 ms
+ 319           * @return 1=设置成功，0=ATIME 寄存器写入失败
+ 320           * @note 同时更新该总线对应的应用等待时间，并额外增加 5 ms 裕量。
+ 321           */
+ 322          bit TCS3400_SetIntegrationTime(I2C_Bus_t bus,
+ 323                                         uint16 time_ms)
+ 324          {
+ 325   1          uint16 cycles;
+ 326   1          uint16 wait_ms;
+ 327   1      
+ 328   1          cycles = TCS3400_CalcCycles(time_ms);
+ 329   1      
+ 330   1          if (!TCS3400_SetATIME(bus, (uint8)(256 - cycles)))
+ 331   1          {
+ 332   2              return 0;
+ 333   2          }
+ 334   1      
+ 335   1          wait_ms =
+ 336   1              (uint16)((((uint32)cycles * 278UL) + 99UL) / 100UL);
+ 337   1      
+ 338   1          g_tcs3400_frame_wait_ms[(uint8)bus] = wait_ms + 5;
+ 339   1      
+ 340   1          return 1;
+ 341   1      }
+ 342          
+ 343          /**
+ 344           * @brief 获取指定总线当前配置对应的帧等待时间
+ 345           * @param[in] bus 目标软件 I2C 总线
+ 346           * @return 帧等待时间，单位 ms
+ 347           */
+ 348          uint16 TCS3400_GetFrameWaitMs(I2C_Bus_t bus)
+ 349          {
+ 350   1          return g_tcs3400_frame_wait_ms[(uint8)bus];
+ 351   1      }
+ 352          
+ 353          /**
+ 354           * @brief 直接设置 ATIME 寄存器
+ 355           * @param[in] bus 目标软件 I2C 总线
+ 356           * @param[in] atime ATIME 寄存器值
+ 357           * @return 1=写入成功，0=写入失败
+ 358           */
+ 359          bit TCS3400_SetATIME(I2C_Bus_t bus, uint8 atime)
+ 360          {
+ 361   1          return TCS_Write8(bus, TCS3400_ATIME, atime);
+ 362   1      }
+C51 COMPILER V9.54   TCS3400_DRIVER                                                        06/29/2026 18:52:57 PAGE 7   
+
+ 363          
+ 364          /**
+ 365           * @brief 设置 TCS3400 模拟增益
+ 366           * @param[in] bus 目标软件 I2C 总线
+ 367           * @param[in] gain 增益编码，仅低两位有效
+ 368           * @return 1=写入成功，0=写入失败
+ 369           */
+ 370          bit TCS3400_SetGain(I2C_Bus_t bus, uint8 gain)
+ 371          {
+ 372   1          return TCS_Write8(bus,
+ 373   1                            TCS3400_CONTROL,
+ 374   1                            (gain & 0x03));
+ 375   1      }
+ 376          
+ 377          /**
+ 378           * @brief 设置 TCS3400 等待时间寄存器
+ 379           * @param[in] bus 目标软件 I2C 总线
+ 380           * @param[in] wtime WTIME 寄存器值
+ 381           * @return 1=写入成功，0=写入失败
+ 382           */
+ 383          bit TCS3400_SetWTIME(I2C_Bus_t bus, uint8 wtime)
+ 384          {
+ 385   1          return TCS_Write8(bus, TCS3400_WTIME, wtime);
+ 386   1      }
+ 387          
+ 388          /**
+ 389           * @brief 读取 TCS3400 芯片 ID
+ 390           * @param[in] bus 目标软件 I2C 总线
+ 391           * @param[out] id 返回芯片 ID 寄存器值
+ 392           * @return 1=读取成功，0=输出指针为空或通信失败
+ 393           */
+ 394          bit TCS3400_ReadID(I2C_Bus_t bus, uint8 *id)
+ 395          {
+ 396   1          if (id == 0)
+ 397   1          {
+ 398   2              return 0;
+ 399   2          }
+ 400   1      
+ 401   1          return Sensor_I2C_ReadRegs(bus,
+ 402   1                                     TCS3400_I2C_ADDR_7BIT,
+ 403   1                                     TCS3400_ID,
+ 404   1                                     id,
+ 405   1                                     1);
+ 406   1      }
+ 407          
+ 408          /**
+ 409           * @brief 读取 TCS3400 的指定 8 位寄存器
+ 410           * @param[in] bus 目标软件 I2C 总线
+ 411           * @param[in] reg 目标寄存器地址
+ 412           * @param[out] value 返回读取到的寄存器值
+ 413           * @return 1=读取成功，0=输出指针为空或通信失败
+ 414           */
+ 415          bit TCS3400_ReadRegValue(I2C_Bus_t bus,
+ 416                                   uint8 reg,
+ 417                                   uint8 *value)
+ 418          {
+ 419   1          if (value == 0)
+ 420   1          {
+ 421   2              return 0;
+ 422   2          }
+ 423   1      
+ 424   1          return Sensor_I2C_ReadRegValue(bus,
+C51 COMPILER V9.54   TCS3400_DRIVER                                                        06/29/2026 18:52:57 PAGE 8   
+
+ 425   1                                         TCS3400_I2C_ADDR_7BIT,
+ 426   1                                         reg,
+ 427   1                                         value);
+ 428   1      }
+ 429          
+ 430          /**
+ 431           * @brief 读取 STATUS 寄存器中的 AVALID 状态
+ 432           * @param[in] bus 目标软件 I2C 总线
+ 433           * @param[out] valid 返回数据有效状态，1=有效，0=无效
+ 434           * @return 1=STATUS 寄存器读取成功，0=输出指针为空或通信失败
+ 435           */
+ 436          bit TCS3400_GetDataValid(I2C_Bus_t bus, uint8 *valid)
+ 437          {
+ 438   1          uint8 status;
+ 439   1      
+ 440   1          if (valid == 0)
+ 441   1          {
+ 442   2              return 0;
+ 443   2          }
+ 444   1      
+ 445   1          if (!TCS_Read8Value(bus, TCS3400_STATUS, &status))
+ 446   1          {
+ 447   2              return 0;
+ 448   2          }
+ 449   1      
+ 450   1          *valid =
+ 451   1              (status & TCS3400_STATUS_AVALID) ? 1 : 0;
+ 452   1      
+ 453   1          return 1;
+ 454   1      }
+ 455          
+ 456          /**
+ 457           * @brief 强制重新启动一次 RGBC ADC 积分
+ 458           * @param[in] bus 目标软件 I2C 总线
+ 459           * @return 1=两次 ENABLE 寄存器写入成功，0=任意一次写入失败
+ 460           * @note 通过先关闭 AEN、再重新开启 AEN 实现。
+ 461           */
+ 462          bit TCS3400_RestartIntegration(I2C_Bus_t bus)
+ 463          {
+ 464   1          /* 保持 PON，关闭 AEN */
+ 465   1          if (!TCS_Write8(bus,
+ 466   1                          TCS3400_ENABLE,
+ 467   1                          TCS3400_EN_PON))
+ 468   1          {
+ 469   2              return 0;
+ 470   2          }
+ 471   1      
+ 472   1          /* 保持 PON，重新开启 AEN */
+ 473   1          if (!TCS_Write8(bus,
+ 474   1                          TCS3400_ENABLE,
+ 475   1                          TCS3400_EN_PON | TCS3400_EN_AEN))
+ 476   1          {
+ 477   2              return 0;
+ 478   2          }
+ 479   1      
+ 480   1          return 1;
+ 481   1      }
+ 482          
+ 483          /**
+ 484           * @brief 不等待 AVALID，直接读取 RGBC 原始数据
+ 485           * @param[in] bus 目标软件 I2C 总线
+ 486           * @param[out] r 返回 Red 通道原始计数
+C51 COMPILER V9.54   TCS3400_DRIVER                                                        06/29/2026 18:52:57 PAGE 9   
+
+ 487           * @param[out] g 返回 Green 通道原始计数
+ 488           * @param[out] b 返回 Blue 通道原始计数
+ 489           * @param[out] c 返回 Clear 通道原始计数
+ 490           * @return 1=输出指针有效并完成读取，0=存在空指针或读取失败
+ 491           * @note 当前底层 16 位读取接口不能反馈单字节 I2C ACK 错误。
+ 492           */
+ 493          bit TCS3400_ReadRGBC_NoWait(I2C_Bus_t bus,
+ 494                                      uint16 *r,
+ 495                                      uint16 *g,
+ 496                                      uint16 *b,
+ 497                                      uint16 *c)
+ 498          {
+ 499   1          if ((r == 0) ||
+ 500   1              (g == 0) ||
+ 501   1              (b == 0) ||
+ 502   1              (c == 0))
+ 503   1          {
+ 504   2              return 0;
+ 505   2          }
+ 506   1      
+ 507   1          if (!TCS_Read16Value(bus, TCS3400_CDATAL, c))
+ 508   1          {
+ 509   2              return 0;
+ 510   2          }
+ 511   1      
+ 512   1          if (!TCS_Read16Value(bus, TCS3400_RDATAL, r))
+ 513   1          {
+ 514   2              return 0;
+ 515   2          }
+ 516   1      
+ 517   1          if (!TCS_Read16Value(bus, TCS3400_GDATAL, g))
+ 518   1          {
+ 519   2              return 0;
+ 520   2          }
+ 521   1      
+ 522   1          if (!TCS_Read16Value(bus, TCS3400_BDATAL, b))
+ 523   1          {
+ 524   2              return 0;
+ 525   2          }
+ 526   1      
+ 527   1          return 1;
+ 528   1      }
+ 529          
+ 530          /**
+ 531           * @brief 不等待 AVALID，直接读取 Clear 数据端口
+ 532           * @param[in] bus 目标软件 I2C 总线
+ 533           * @param[out] value 返回 Clear 或 IR 映射后的 16 位原始计数
+ 534           * @return 1=读取成功，0=输出指针为空或通信失败
+ 535           */
+ 536          bit TCS3400_ReadClearPort_NoWait(I2C_Bus_t bus,
+ 537                                           uint16 *value)
+ 538          {
+ 539   1          uint8 lo;
+ 540   1          uint8 hi;
+ 541   1      
+ 542   1          if (value == 0)
+ 543   1          {
+ 544   2              return 0;
+ 545   2          }
+ 546   1      
+ 547   1          if (!TCS_Read8Value(bus, TCS3400_CDATAL, &lo))
+ 548   1          {
+C51 COMPILER V9.54   TCS3400_DRIVER                                                        06/29/2026 18:52:57 PAGE 10  
+
+ 549   2              return 0;
+ 550   2          }
+ 551   1      
+ 552   1          if (!TCS_Read8Value(bus, TCS3400_CDATAH, &hi))
+ 553   1          {
+ 554   2              return 0;
+ 555   2          }
+ 556   1      
+ 557   1          *value = ((uint16)hi << 8) | lo;
+ 558   1      
+ 559   1          return 1;
+ 560   1      }
+ 561          
+ 562          /**
+ 563           * @brief 等待一帧新数据后读取 RGBC 原始计数
+ 564           * @param[in] bus 目标软件 I2C 总线
+ 565           * @param[out] r 返回 Red 通道原始计数
+ 566           * @param[out] g 返回 Green 通道原始计数
+ 567           * @param[out] b 返回 Blue 通道原始计数
+ 568           * @param[out] c 返回 Clear 通道原始计数
+ 569           * @return 1=等待及读取成功，0=等待超时、通信失败或参数错误
+ 570           * @note 本函数会阻塞等待新数据。
+ 571           */
+ 572          bit TCS3400_ReadRGBC(I2C_Bus_t bus,
+ 573                               uint16 *r,
+ 574                               uint16 *g,
+ 575                               uint16 *b,
+ 576                               uint16 *c)
+ 577          {
+ 578   1          if (!TCS3400_WaitValid(bus))
+ 579   1          {
+ 580   2              return 0;
+ 581   2          }
+ 582   1      
+ 583   1          return TCS3400_ReadRGBC_NoWait(bus, r, g, b, c);
+ 584   1      }
+ 585          
+ 586          /**
+ 587           * @brief 设置 Clear 数据端口的 IR 映射状态
+ 588           * @param[in] bus 目标软件 I2C 总线
+ 589           * @param[in] en 1=开启 IR 映射，0=关闭 IR 映射
+ 590           * @return 1=设置成功，0=寄存器写入失败
+ 591           * @note 设置完成后固定延时 3 ms，用于寄存器模式切换稳定。
+ 592           */
+ 593          bit TCS3400_SetIRMapEnable(I2C_Bus_t bus, bit en)
+ 594          {
+ 595   1          uint8 value;
+ 596   1      
+ 597   1          value =
+ 598   1              en ? TCS3400_IR_ENABLE : TCS3400_IR_DISABLE;
+ 599   1      
+ 600   1          if (!TCS_Write8(bus, TCS3400_IR, value))
+ 601   1          {
+ 602   2              return 0;
+ 603   2          }
+ 604   1      
+ 605   1          /* 等待寄存器模式切换稳定，不代表等待一帧积分 */
+ 606   1          Delay_ms(3);
+ 607   1      
+ 608   1          return 1;
+ 609   1      }
+ 610          
+C51 COMPILER V9.54   TCS3400_DRIVER                                                        06/29/2026 18:52:57 PAGE 11  
+
+ 611          /**
+ 612           * @brief 读取 IR 通道原始计数
+ 613           * @param[in] bus 目标软件 I2C 总线
+ 614           * @return IR 原始计数；等待失败时返回 0
+ 615           * @note 本函数会开启 IR 映射、阻塞等待新帧，然后恢复普通 Clear 模式。
+ 616           */
+ 617          uint16 TCS3400_ReadIR(I2C_Bus_t bus)
+ 618          {
+ 619   1          uint16 ir;
+ 620   1      
+ 621   1          TCS3400_SetIRMapEnable(bus, 1);
+ 622   1      
+ 623   1          if (!TCS3400_WaitValid(bus))
+ 624   1          {
+ 625   2              TCS3400_SetIRMapEnable(bus, 0);
+ 626   2              return 0;
+ 627   2          }
+ 628   1      
+ 629   1          ir = TCS_Read16(bus, TCS3400_CDATAL);
+ 630   1      
+ 631   1          TCS3400_SetIRMapEnable(bus, 0);
+ 632   1      
+ 633   1          /* 等待关闭 IR 映射后的普通 Clear 数据恢复 */
+ 634   1          TCS3400_WaitValid(bus);
+ 635   1      
+ 636   1          return ir;
+ 637   1      }
+ 638          
+ 639          /**
+ 640           * @brief 读取 IR 映射状态下的 RGB 和 IR 原始数据
+ 641           * @param[in] bus 目标软件 I2C 总线
+ 642           * @param[out] r 返回 Red 通道原始计数
+ 643           * @param[out] g 返回 Green 通道原始计数
+ 644           * @param[out] b 返回 Blue 通道原始计数
+ 645           * @param[out] ir 返回 IR 通道原始计数
+ 646           * @return 1=读取及恢复成功，0=参数错误、等待超时或读取失败
+ 647           * @note 本函数会开启 IR 映射，读取后关闭 IR 映射并等待普通模式恢复。
+ 648           */
+ 649          bit TCS3400_ReadRGBIR(I2C_Bus_t bus,
+ 650                                uint16 *r,
+ 651                                uint16 *g,
+ 652                                uint16 *b,
+ 653                                uint16 *ir)
+ 654          {
+ 655   1          uint8 read_ok;
+ 656   1      
+ 657   1          read_ok = 1;
+ 658   1      
+ 659   1          if ((r == 0) ||
+ 660   1              (g == 0) ||
+ 661   1              (b == 0) ||
+ 662   1              (ir == 0))
+ 663   1          {
+ 664   2              return 0;
+ 665   2          }
+ 666   1      
+ 667   1          if (!TCS3400_SetIRMapEnable(bus, 1))
+ 668   1          {
+ 669   2              return 0;
+ 670   2          }
+ 671   1      
+ 672   1          if (!TCS3400_WaitValid(bus))
+C51 COMPILER V9.54   TCS3400_DRIVER                                                        06/29/2026 18:52:57 PAGE 12  
+
+ 673   1          {
+ 674   2              TCS3400_SetIRMapEnable(bus, 0);
+ 675   2              return 0;
+ 676   2          }
+ 677   1      
+ 678   1          /*
+ 679   1           * IR 映射模式下：
+ 680   1           * Clear 数据端口对应 IR 原始计数，
+ 681   1           * R、G、B 通道仍从各自寄存器读取。
+ 682   1           */
+ 683   1          if (!TCS_Read16Value(bus, TCS3400_CDATAL, ir))
+ 684   1          {
+ 685   2              read_ok = 0;
+ 686   2          }
+ 687   1      
+ 688   1          if (read_ok && !TCS_Read16Value(bus, TCS3400_RDATAL, r))
+ 689   1          {
+ 690   2              read_ok = 0;
+ 691   2          }
+ 692   1      
+ 693   1          if (read_ok && !TCS_Read16Value(bus, TCS3400_GDATAL, g))
+ 694   1          {
+ 695   2              read_ok = 0;
+ 696   2          }
+ 697   1      
+ 698   1          if (read_ok && !TCS_Read16Value(bus, TCS3400_BDATAL, b))
+ 699   1          {
+ 700   2              read_ok = 0;
+ 701   2          }
+ 702   1      
+ 703   1          TCS3400_SetIRMapEnable(bus, 0);
+ 704   1      
+ 705   1          if (!read_ok)
+ 706   1          {
+ 707   2              return 0;
+ 708   2          }
+ 709   1      
+ 710   1          /* 等待关闭 IR 映射后的普通模式恢复 */
+ 711   1          if (!TCS3400_WaitValid(bus))
+ 712   1          {
+ 713   2              return 0;
+ 714   2          }
+ 715   1      
+ 716   1          return 1;
+ 717   1      }       
+ 718          
+ 719          /**
+ 720           * @brief 读取 Red 通道原始计数
+ 721           * @param[in] bus 目标软件 I2C 总线
+ 722           * @return Red 通道原始计数；读取失败时返回初始值 0
+ 723           */
+ 724          uint16 TCS3400_ReadR(I2C_Bus_t bus)
+ 725          {
+ 726   1          uint16 r = 0;
+ 727   1          uint16 g = 0;
+ 728   1          uint16 b = 0;
+ 729   1          uint16 c = 0;
+ 730   1      
+ 731   1          TCS3400_ReadRGBC(bus, &r, &g, &b, &c);
+ 732   1      
+ 733   1          return r;
+ 734   1      }
+C51 COMPILER V9.54   TCS3400_DRIVER                                                        06/29/2026 18:52:57 PAGE 13  
+
+ 735          
+ 736          /**
+ 737           * @brief 读取 Green 通道原始计数
+ 738           * @param[in] bus 目标软件 I2C 总线
+ 739           * @return Green 通道原始计数；读取失败时返回初始值 0
+ 740           */
+ 741          uint16 TCS3400_ReadG(I2C_Bus_t bus)
+ 742          {
+ 743   1          uint16 r = 0;
+ 744   1          uint16 g = 0;
+ 745   1          uint16 b = 0;
+ 746   1          uint16 c = 0;
+ 747   1      
+ 748   1          TCS3400_ReadRGBC(bus, &r, &g, &b, &c);
+ 749   1      
+ 750   1          return g;
+ 751   1      }
+ 752          
+ 753          /**
+ 754           * @brief 读取 Blue 通道原始计数
+ 755           * @param[in] bus 目标软件 I2C 总线
+ 756           * @return Blue 通道原始计数；读取失败时返回初始值 0
+ 757           */
+ 758          uint16 TCS3400_ReadB(I2C_Bus_t bus)
+ 759          {
+ 760   1          uint16 r = 0;
+ 761   1          uint16 g = 0;
+ 762   1          uint16 b = 0;
+ 763   1          uint16 c = 0;
+ 764   1      
+ 765   1          TCS3400_ReadRGBC(bus, &r, &g, &b, &c);
+ 766   1      
+ 767   1          return b;
+ 768   1      }
+ 769          
+ 770          /**
+ 771           * @brief 读取 Clear 通道原始计数
+ 772           * @param[in] bus 目标软件 I2C 总线
+ 773           * @return Clear 通道原始计数；读取失败时返回初始值 0
+ 774           */
+ 775          uint16 TCS3400_ReadC(I2C_Bus_t bus)
+ 776          {
+ 777   1          uint16 r = 0;
+ 778   1          uint16 g = 0;
+ 779   1          uint16 b = 0;
+ 780   1          uint16 c = 0;
+ 781   1      
+ 782   1          TCS3400_ReadRGBC(bus, &r, &g, &b, &c);
+ 783   1      
+ 784   1          return c;
+ 785   1      }
+ 786          
+ 787          /**
+ 788           * @brief 仅读取 IR 通道原始计数
+ 789           * @param[in] bus 目标软件 I2C 总线
+ 790           * @return IR 通道原始计数；读取失败时返回初始值 0
+ 791           */
+ 792          uint16 TCS3400_ReadIR_Only(I2C_Bus_t bus)
+ 793          {
+ 794   1          uint16 r = 0;
+ 795   1          uint16 g = 0;
+ 796   1          uint16 b = 0;
+C51 COMPILER V9.54   TCS3400_DRIVER                                                        06/29/2026 18:52:57 PAGE 14  
+
+ 797   1          uint16 ir = 0;
+ 798   1      
+ 799   1          TCS3400_ReadRGBIR(bus, &r, &g, &b, &ir);
+ 800   1      
+ 801   1          return ir;
+ 802   1      }
+ 803          
+ 804          /**
+ 805           * @brief 读取 RGBC 和 IR 原始数据
+ 806           * @param[in] bus 目标软件 I2C 总线
+ 807           * @param[out] r 返回 Red 通道原始计数
+ 808           * @param[out] g 返回 Green 通道原始计数
+ 809           * @param[out] b 返回 Blue 通道原始计数
+ 810           * @param[out] c 返回 Clear 通道原始计数
+ 811           * @param[out] ir 返回 IR 通道原始计数
+ 812           * @return 1=两次读取均成功，0=任意一次读取失败
+ 813           * @note 第二次 TCS3400_ReadRGBIR() 会重新写入 r、g、b。
+ 814           */
+ 815          bit TCS3400_ReadRaw(I2C_Bus_t bus,
+ 816                              uint16 *r,
+ 817                              uint16 *g,
+ 818                              uint16 *b,
+ 819                              uint16 *c,
+ 820                              uint16 *ir)
+ 821          {
+ 822   1          if (!TCS3400_ReadRGBC(bus, r, g, b, c))
+ 823   1          {
+ 824   2              return 0;
+ 825   2          }
+ 826   1      
+ 827   1          if (!TCS3400_ReadRGBIR(bus, r, g, b, ir))
+ 828   1          {
+ 829   2              return 0;
+ 830   2          }
+ 831   1      
+ 832   1          return 1;
+ 833   1      }
+ 834          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   2067    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =      8     138
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----       1
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

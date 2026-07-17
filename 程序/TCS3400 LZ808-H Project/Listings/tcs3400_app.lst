@@ -1,0 +1,949 @@
+C51 COMPILER V9.54   TCS3400_APP                                                           07/11/2026 11:22:11 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE TCS3400_APP
+OBJECT MODULE PLACED IN .\Objects\tcs3400_app.obj
+COMPILER INVOKED BY: D:\Keil_v5\C51\BIN\C51.EXE App\tcs3400_app.c LARGE WARNINGLEVEL(0) OPTIMIZE(8,SPEED) BROWSE INCDIR(
+                    -.\Hardware;.\System;.\User;.\App;.\Control) DEBUG OBJECTEXTEND PRINT(.\Listings\tcs3400_app.lst) OBJECT(.\Objects\tcs340
+                    -0_app.obj)
+
+line level    source
+
+   1          /**
+   2           * @file tcs3400_app.c
+   3           * @brief TCS3400 应用层协议解析、命令分发与非阻塞采样状态机实现
+   4           *
+   5           * @details
+   6           * 本模块负责解析 MTF:AA-FF-PPP 格式上位机命令，管理 4 路 TCS3400，
+   7           * 按需读取 R、G、B、Clear、IR、ID，并根据积分时间，通过串口
+   8           * 以小端 IEEE 754 单精度浮点数返回响应帧。
+   9           */
+  10          
+  11          #include "tcs3400_app.h"
+  12          #include "tcs3400_driver.h"
+  13          
+  14          /*==============================================================================
+  15           * 宏定义
+  16           *============================================================================*/
+  17          
+  18          #define APP_LINE_MAX                  20  /**< 单行命令接收缓冲区长度 */
+  19          #define APP_CMD_LEN                   13  /**< 命令正文长度：MTF:AA-FF-PPP */
+  20          #define APP_CH_MAX                     4  /**< TCS3400 传感器通道数量 */
+  21          #define APP_SENSOR_RGBC                0  /**< 普通 RGBC 读取模式 */
+  22          #define APP_SENSOR_IR_WAIT             1  /**< IR 映射开启后的等待模式 */
+  23          #define APP_REPLY_EXTRA_TIMEOUT_MS   300  /**< 命令回复额外超时时间，单位 ms */
+  24          
+  25          /*==============================================================================
+  26           * 类型定义
+  27           *============================================================================*/
+  28          
+  29          /**
+  30           * @brief 上位机命令对应的 TCS3400 数据通道
+  31           */
+  32          typedef enum
+  33          {
+  34              APP_CHANNEL_NONE = 0, /**< 无效通道 */
+  35              APP_CHANNEL_R,        /**< 红色通道 */
+  36              APP_CHANNEL_G,        /**< 绿色通道 */
+  37              APP_CHANNEL_B,        /**< 蓝色通道 */
+  38              APP_CHANNEL_CLEAR,    /**< Clear 通道 */
+  39              APP_CHANNEL_IR        /**< 红外通道 */
+  40          } AppChannel_t;
+  41          
+  42          /**
+  43           * @brief 传感器采样状态
+  44           */
+  45          typedef enum
+  46          {
+  47              APP_SAMPLE_IDLE = 0,            /**< 空闲状态 */
+  48              APP_SAMPLE_WAIT_RGBC,           /**< 等待普通 RGBC 积分帧 */
+  49              APP_SAMPLE_WAIT_IR,             /**< 等待 IR 映射积分帧 */
+  50              APP_SAMPLE_WAIT_CLEAR_RECOVERY  /**< 等待关闭 IR 映射后的 Clear 恢复帧 */
+  51          } AppSampleState_t;
+  52          
+  53          /*==============================================================================
+C51 COMPILER V9.54   TCS3400_APP                                                           07/11/2026 11:22:11 PAGE 2   
+
+  54           * 模块内部变量
+  55           *============================================================================*/
+  56          
+  57          /** 传感器初始化完成标志 */
+  58          static bit g_sensor_inited = 0;
+  59          
+  60          /** 下一帧采样到期时间戳，单位 ms */
+  61          static uint32 g_sample_due_ms = 0;
+  62          
+  63          /** 各路传感器当前记录的积分时间，单位 ms */
+  64          static uint16 g_sample_time_ms[APP_CH_MAX] = {178, 178, 178, 178};
+  65          
+  66          /** 当前是否存在等待回复的命令 */
+  67          static bit g_reply_pending = 0;
+  68          
+  69          /** 当前等待回复命令对应的 I2C 总线 */
+  70          static I2C_Bus_t g_pending_bus = SENSOR_I2C_BUS_1;
+  71          
+  72          /** 当前等待回复命令对应的数据通道 */
+  73          static AppChannel_t g_pending_channel = APP_CHANNEL_NONE;
+  74          
+  75          /** 当前采样流程状态 */
+  76          static AppSampleState_t g_sample_state = APP_SAMPLE_IDLE;
+  77          
+  78          /** IR 采样临时缓存 */
+  79          static uint16 g_pending_ir_value = 0;
+  80          
+  81          /** 当前采样流程超时截止时刻，单位 ms */
+  82          static uint32 g_sample_deadline_ms = 0;
+  83          
+  84          /*==============================================================================
+  85           * 模块内部函数声明
+  86           *============================================================================*/
+  87          
+  88          static bit App_TimeReached(uint32 now, uint32 target);
+  89          static AppChannel_t App_CodeToChannel(uint8 channel_id);
+  90          static bit App_IsDigit(char c);
+  91          static uint16 App_ParseTimeMs(char *line);
+  92          static uint32 App_U16ToFloatBits(uint16 value);
+  93          static void App_SendFloatBits(uint32 bits);
+  94          static void App_SendFloatFrame(uint16 value);
+  95          static void App_SendErr(void);
+  96          static bit App_CheckFrameFormat(char *line);
+  97          static bit App_CheckParamDigits(char *line);
+  98          static uint8 App_ParseCode(char high, char low);
+  99          static bit App_ParamIs(char *line, char p0, char p1, char p2);
+ 100          static I2C_Bus_t App_AA2Bus(uint8 aa);
+ 101          static bit App_ReadID(I2C_Bus_t bus, uint8 *id);
+ 102          static bit App_ParseGainParam(char *line,
+ 103                                        uint8 *gain_reg,
+ 104                                        uint16 *gain_value);
+ 105          static uint16 App_GainRegToValue(uint8 value);
+ 106          static uint16 App_ATimeToMs(uint8 atime);
+ 107          static void App_SetIntegrationTime(I2C_Bus_t bus, uint16 time_ms);
+ 108          static bit App_StartCommandSample(I2C_Bus_t bus,
+ 109                                            AppChannel_t channel,
+ 110                                            uint16 time_ms);
+ 111          static void App_ClearPendingState(void);
+ 112          static void App_AbortPendingSample(void);
+ 113          static void App_PendingTask(void);
+ 114          static void App_UartTask(void);
+ 115          
+C51 COMPILER V9.54   TCS3400_APP                                                           07/11/2026 11:22:11 PAGE 3   
+
+ 116          /*==============================================================================
+ 117           * 模块内部函数实现
+ 118           *============================================================================*/
+ 119          
+ 120          /**
+ 121           * @brief 判断指定时刻是否已经到达
+ 122           * @param[in] now 当前系统时间戳，单位 ms
+ 123           * @param[in] target 目标时间戳，单位 ms
+ 124           * @return 1=已经到达或超过目标时间，0=尚未到达
+ 125           * @note 使用有符号差值判断，可兼容无符号毫秒计数自然回绕
+ 126           */
+ 127          static bit App_TimeReached(uint32 now, uint32 target)
+ 128          {
+ 129   1          return ((long)(now - target) >= 0) ? 1 : 0;
+ 130   1      }
+ 131          
+ 132          /**
+ 133           * @brief 将 FF 功能码转换为应用层数据通道
+ 134           * @param[in] ff 功能码，取值 1~5
+ 135           * @return 对应的 AppChannel_t，参数无效时返回 APP_CHANNEL_NONE
+ 136           */
+ 137          static AppChannel_t App_CodeToChannel(uint8 channel_id)
+ 138          {
+ 139   1          switch (channel_id)
+ 140   1          {
+ 141   2              case 1:  return APP_CHANNEL_R;
+ 142   2              case 2:  return APP_CHANNEL_G;
+ 143   2              case 3:  return APP_CHANNEL_B;
+ 144   2              case 4:  return APP_CHANNEL_CLEAR;
+ 145   2              case 5:  return APP_CHANNEL_IR;
+ 146   2              default: return APP_CHANNEL_NONE;
+ 147   2          }
+ 148   1      }
+ 149          
+ 150          /**
+ 151           * @brief 判断字符是否为十进制数字
+ 152           * @param[in] c 待检查字符
+ 153           * @return 1=字符位于 '0'~'9'，0=不是十进制数字
+ 154           */
+ 155          static bit App_IsDigit(char c)
+ 156          {
+ 157   1          return (c >= '0' && c <= '9');
+ 158   1      }
+ 159          
+ 160          /**
+ 161           * @brief 解析命令中的三位 PPP 积分时间参数
+ 162           * @param[in] line 以 '\0' 结尾的完整命令字符串
+ 163           * @return 解析得到的积分时间，单位 ms
+ 164           * @note 调用前应已通过 App_CheckParamDigits() 检查 PPP 字段。
+ 165           */
+ 166          static uint16 App_ParseTimeMs(char *line)
+ 167          {
+ 168   1          uint16 time_ms;
+ 169   1      
+ 170   1          time_ms = (uint16)(line[10] - '0') * 100;
+ 171   1          time_ms += (uint16)(line[11] - '0') * 10;
+ 172   1          time_ms += (uint16)(line[12] - '0');
+ 173   1      
+ 174   1          return time_ms;
+ 175   1      }
+ 176          
+ 177          /**
+C51 COMPILER V9.54   TCS3400_APP                                                           07/11/2026 11:22:11 PAGE 4   
+
+ 178           * @brief 将 16 位无符号整数转换为 IEEE 754 单精度浮点位模式
+ 179           * @param[in] value 待转换的 16 位无符号整数
+ 180           * @return 数值等价的 IEEE 754 单精度浮点 32 位位模式
+ 181           * @note 输入范围为 0~65535，可被单精度浮点精确表示。
+ 182           */
+ 183          static uint32 App_U16ToFloatBits(uint16 value)
+ 184          {
+ 185   1          uint8 exp;
+ 186   1          uint16 base;
+ 187   1          uint16 rest;
+ 188   1          uint32 bits;
+ 189   1      
+ 190   1          if (value == 0)
+ 191   1          {
+ 192   2              return 0;
+ 193   2          }
+ 194   1      
+ 195   1          exp = 0;
+ 196   1          base = 1;
+ 197   1      
+ 198   1          while ((base <= 0x4000) &&
+ 199   1                 ((uint16)(base << 1) <= value))
+ 200   1          {
+ 201   2              base <<= 1;
+ 202   2              exp++;
+ 203   2          }
+ 204   1      
+ 205   1          rest = value - base;
+ 206   1      
+ 207   1          /* 组合指数部分 */
+ 208   1          bits = ((uint32)(exp + 127) << 23);
+ 209   1      
+ 210   1          /* 组合尾数部分 */
+ 211   1          bits |= ((uint32)rest << (23 - exp));
+ 212   1      
+ 213   1          return bits;
+ 214   1      }
+ 215          
+ 216          /**
+ 217           * @brief 发送 IEEE 754 单精度浮点数二进制响应帧
+ 218           * @param[in] bits IEEE 754 单精度浮点 32 位位模式
+ 219           * @note 帧格式为 '=' + 4 字节小端浮点数 + CRLF。
+ 220           */
+ 221          static void App_SendFloatBits(uint32 bits)
+ 222          {
+ 223   1          Uart_SendByte('=');
+ 224   1          Uart_SendByte((uint8)(bits & 0xFF));
+ 225   1          Uart_SendByte((uint8)((bits >> 8) & 0xFF));
+ 226   1          Uart_SendByte((uint8)((bits >> 16) & 0xFF));
+ 227   1          Uart_SendByte((uint8)((bits >> 24) & 0xFF));
+ 228   1          Uart_SendStr("\r\n");
+ 229   1      }
+ 230          
+ 231          /**
+ 232           * @brief 将 16 位数值转换为浮点格式并发送二进制响应帧
+ 233           * @param[in] value 待返回的 16 位无符号数值
+ 234           */
+ 235          static void App_SendFloatFrame(uint16 value)
+ 236          {
+ 237   1          App_SendFloatBits(App_U16ToFloatBits(value));
+ 238   1      }
+ 239          
+C51 COMPILER V9.54   TCS3400_APP                                                           07/11/2026 11:22:11 PAGE 5   
+
+ 240          /**
+ 241           * @brief 发送统一异常响应帧
+ 242           * @note 异常帧为 3D FF FF FF FF 0D 0A。
+ 243           */
+ 244          static void App_SendErr(void)
+ 245          {
+ 246   1          App_SendFloatBits(0xFFFFFFFFUL);
+ 247   1      }
+ 248          
+ 249          /**
+ 250           * @brief 检查命令固定格式、AA/FF 数字字段及命令长度
+ 251           * @param[in] line 以 '\0' 结尾的命令字符串
+ 252           * @return 1=固定格式正确，0=格式错误
+ 253           * @note 不检查末尾 PPP 三位参数内容，需要时由 App_CheckParamDigits() 检查。
+ 254           */
+ 255          static bit App_CheckFrameFormat(char *line)
+ 256          {
+ 257   1          uint8 i;
+ 258   1      
+ 259   1          if (line == 0) return 0;
+ 260   1          for (i = 0; i < APP_CMD_LEN; i++)
+ 261   1          {
+ 262   2              if (line[i] == 0) return 0;
+ 263   2          }
+ 264   1          if (line[APP_CMD_LEN] != 0) return 0;
+ 265   1      
+ 266   1          if (line[0] != 'M') return 0;
+ 267   1          if (line[1] != 'T') return 0;
+ 268   1          if (line[2] != 'F') return 0;
+ 269   1          if (line[3] != ':') return 0;
+ 270   1          if (!App_IsDigit(line[4])) return 0;
+ 271   1          if (!App_IsDigit(line[5])) return 0;
+ 272   1          if (line[6] != '-') return 0;
+ 273   1          if (line[9] != '-') return 0;
+ 274   1          return 1;
+ 275   1      }
+ 276          
+ 277          /**
+ 278           * @brief 检查命令 PPP 参数字段是否全部为数字
+ 279           * @param[in] line 以 '\0' 结尾的完整命令字符串
+ 280           * @return 1=PPP 三位均为数字，0=至少一位不是数字
+ 281           */
+ 282          static bit App_CheckParamDigits(char *line)
+ 283          {
+ 284   1          if (!App_IsDigit(line[10])) return 0;
+ 285   1          if (!App_IsDigit(line[11])) return 0;
+ 286   1          if (!App_IsDigit(line[12])) return 0;
+ 287   1          return 1;
+ 288   1      }
+ 289          
+ 290          /**
+ 291           * @brief 将两个 ASCII 十进制数字字符转换为两位数值
+ 292           * @param[in] high 十位数字字符
+ 293           * @param[in] low 个位数字字符
+ 294           * @return 转换后的数值，范围为 0~99
+ 295           */
+ 296          static uint8 App_ParseCode(char high, char low)
+ 297          {
+ 298   1          return (uint8)((high - '0') * 10 + (low - '0'));
+ 299   1      }
+ 300          
+ 301          /**
+C51 COMPILER V9.54   TCS3400_APP                                                           07/11/2026 11:22:11 PAGE 6   
+
+ 302           * @brief 判断 PPP 参数是否等于指定三个字符
+ 303           * @param[in] line 以 '\0' 结尾的完整命令字符串
+ 304           * @param[in] p0 PPP 参数百位字符
+ 305           * @param[in] p1 PPP 参数十位字符
+ 306           * @param[in] p2 PPP 参数个位字符
+ 307           * @return 1=PPP 参数完全匹配，0=不匹配
+ 308           */
+ 309          static bit App_ParamIs(char *line, char p0, char p1, char p2)
+ 310          {
+ 311   1          return ((line[10] == p0) && (line[11] == p1) && (line[12] == p2));
+ 312   1      }
+ 313          
+ 314          /**
+ 315           * @brief 将 AA 传感器通道号转换为 I2C 总线枚举
+ 316           * @param[in] aa 传感器通道号，范围为 1~4
+ 317           * @return 对应的 I2C_Bus_t 枚举值
+ 318           * @note 调用前需先检查 aa 是否位于 1~APP_CH_MAX。
+ 319           */
+ 320          static I2C_Bus_t App_AA2Bus(uint8 aa)
+ 321          {
+ 322   1          return (I2C_Bus_t)(aa - 1);
+ 323   1      }
+ 324          
+ 325          /**
+ 326           * @brief 读取指定总线上的 TCS3400 ID
+ 327           * @param[in] bus 目标 I2C 总线
+ 328           * @param[out] id 返回读取到的 ID 寄存器值
+ 329           * @return 1=读取成功，0=参数无效或通信失败
+ 330           */
+ 331          static bit App_ReadID(I2C_Bus_t bus, uint8 *id)
+ 332          {
+ 333   1          if (id == 0)
+ 334   1          {
+ 335   2              return 0;
+ 336   2          }
+ 337   1      
+ 338   1          return TCS3400_ReadID(bus, id);
+ 339   1      }
+ 340          
+ 341          /**
+ 342           * @brief 解析增益设置命令中的 PPP 参数
+ 343           * @param[in] line 以 '\0' 结尾的完整命令字符串
+ 344           * @param[out] gain_reg 返回 TCS3400 CONTROL 寄存器增益编码
+ 345           * @param[out] gain_value 返回实际增益倍数 1、4、16 或 64
+ 346           * @return 1=参数有效且解析成功，0=参数无效或输出指针为空
+ 347           */
+ 348          static bit App_ParseGainParam(char *line, uint8 *gain_reg, uint16 *gain_value)
+ 349          {
+ 350   1          if ((gain_reg == 0) || (gain_value == 0))
+ 351   1          {
+ 352   2              return 0;
+ 353   2          }
+ 354   1      
+ 355   1          if (App_ParamIs(line, '0', '0', '1'))
+ 356   1          {
+ 357   2              *gain_reg = TCS3400_GAIN_1X;
+ 358   2              *gain_value = 1;
+ 359   2              return 1;
+ 360   2          }
+ 361   1      
+ 362   1          if (App_ParamIs(line, '0', '0', '4'))
+ 363   1          {
+C51 COMPILER V9.54   TCS3400_APP                                                           07/11/2026 11:22:11 PAGE 7   
+
+ 364   2              *gain_reg = TCS3400_GAIN_4X;
+ 365   2              *gain_value = 4;
+ 366   2              return 1;
+ 367   2          }
+ 368   1      
+ 369   1          if (App_ParamIs(line, '0', '1', '6'))
+ 370   1          {
+ 371   2              *gain_reg = TCS3400_GAIN_16X;
+ 372   2              *gain_value = 16;
+ 373   2              return 1;
+ 374   2          }
+ 375   1      
+ 376   1          if (App_ParamIs(line, '0', '6', '4'))
+ 377   1          {
+ 378   2              *gain_reg = TCS3400_GAIN_64X;
+ 379   2              *gain_value = 64;
+ 380   2              return 1;
+ 381   2          }
+ 382   1      
+ 383   1          return 0;
+ 384   1      }
+ 385          
+ 386          /**
+ 387           * @brief 将 CONTROL 寄存器增益编码转换为实际增益倍数
+ 388           * @param[in] value CONTROL 寄存器值
+ 389           * @return 实际增益倍数 1、4、16 或 64，编码无效时返回 0
+ 390           */
+ 391          static uint16 App_GainRegToValue(uint8 value)
+ 392          {
+ 393   1          switch (value & 0x03)
+ 394   1          {
+ 395   2              case TCS3400_GAIN_1X:  return 1;
+ 396   2              case TCS3400_GAIN_4X:  return 4;
+ 397   2              case TCS3400_GAIN_16X: return 16;
+ 398   2              case TCS3400_GAIN_64X: return 64;
+ 399   2              default:               return 0;
+ 400   2          }
+ 401   1      }
+ 402          
+ 403          /**
+ 404           * @brief 将 ATIME 寄存器值换算为积分时间
+ 405           * @param[in] atime ATIME 寄存器值
+ 406           * @return 换算后的积分时间，单位 ms
+ 407           * @note 按每积分周期约 2.78 ms 计算并四舍五入到整数毫秒。
+ 408           */
+ 409          static uint16 App_ATimeToMs(uint8 atime)
+ 410          {
+ 411   1          uint16 cycles;
+ 412   1      
+ 413   1          /* ATIME=0x00 时对应 256 个积分周期 */
+ 414   1          cycles = (uint16)(256 - atime);
+ 415   1          if (cycles == 0)
+ 416   1          {
+ 417   2              cycles = 256;
+ 418   2          }
+ 419   1      
+ 420   1          /* integration_ms = cycles * 2.78 ms */
+ 421   1          return (uint16)((((uint32)cycles * 278UL) + 99UL) / 100UL);
+ 422   1      }
+ 423          
+ 424          /**
+ 425           * @brief 设置指定通道的积分时间并更新应用层记录
+C51 COMPILER V9.54   TCS3400_APP                                                           07/11/2026 11:22:11 PAGE 8   
+
+ 426           * @param[in] bus 目标 I2C 总线
+ 427           * @param[in] time_ms 目标积分时间，单位 ms
+ 428           * @note 输入值会被限制在 3~712 ms，当前函数本身未被完整命令处理流程调用。
+ 429           */
+ 430          static void App_SetIntegrationTime(I2C_Bus_t bus, uint16 time_ms)
+ 431          {
+ 432   1          if (time_ms < 3) time_ms = 3;
+ 433   1          if (time_ms > 712) time_ms = 712;
+ 434   1      
+ 435   1          TCS3400_SetIntegrationTime(bus, time_ms);
+ 436   1          g_sample_time_ms[(uint8)bus] = time_ms;
+ 437   1      }
+ 438          
+ 439          /**
+ 440           * @brief 启动一条由上位机命令触发的非阻塞采样流程
+ 441           * @param[in] bus 目标 I2C 总线
+ 442           * @param[in] channel 待读取的数据通道
+ 443           * @param[in] time_ms 本次积分时间，单位 ms
+ 444           * @return 1=采样启动成功，0=参数错误或配置失败
+ 445           * @note 输入积分时间会被限制在 3~712 ms。
+ 446           */
+ 447          static bit App_StartCommandSample(I2C_Bus_t bus,
+ 448                                            AppChannel_t channel,
+ 449                                            uint16 time_ms)
+ 450          {
+ 451   1          uint32 now;
+ 452   1      
+ 453   1          if (time_ms < 3) time_ms = 3;
+ 454   1          if (time_ms > 712) time_ms = 712;
+ 455   1      
+ 456   1          if (!TCS3400_SetIntegrationTime(bus, time_ms))
+ 457   1              return 0;
+ 458   1      
+ 459   1          if (channel == APP_CHANNEL_IR)
+ 460   1          {
+ 461   2              if (!TCS3400_SetIRMapEnable(bus, 1))
+ 462   2                  return 0;
+ 463   2          }
+ 464   1          else
+ 465   1          {
+ 466   2              if (!TCS3400_SetIRMapEnable(bus, 0))
+ 467   2                  return 0;
+ 468   2          }
+ 469   1      
+ 470   1          if (!TCS3400_RestartIntegration(bus))
+ 471   1              return 0;
+ 472   1      
+ 473   1          /* RestartIntegration 会再次清除 IR 映射，需防止 ENABLE 写入覆盖 IR 位 */
+ 474   1          if (channel == APP_CHANNEL_IR)
+ 475   1          {
+ 476   2              if (!TCS3400_SetIRMapEnable(bus, 1))
+ 477   2                  return 0;
+ 478   2          }
+ 479   1      
+ 480   1          now = Timer0_GetMs();
+ 481   1      
+ 482   1          g_pending_bus = bus;
+ 483   1          g_pending_channel = channel;
+ 484   1          g_reply_pending = 1;
+ 485   1      
+ 486   1          g_sample_due_ms = now + TCS3400_GetFrameWaitMs(bus);
+ 487   1          g_sample_deadline_ms = g_sample_due_ms + APP_REPLY_EXTRA_TIMEOUT_MS;
+C51 COMPILER V9.54   TCS3400_APP                                                           07/11/2026 11:22:11 PAGE 9   
+
+ 488   1      
+ 489   1          if (channel == APP_CHANNEL_IR)
+ 490   1              g_sample_state = APP_SAMPLE_WAIT_IR;
+ 491   1          else
+ 492   1              g_sample_state = APP_SAMPLE_WAIT_RGBC;
+ 493   1      
+ 494   1          return 1;
+ 495   1      }
+ 496          
+ 497          /**
+ 498           * @brief 清除当前等待中的采样流程状态
+ 499           */
+ 500          static void App_ClearPendingState(void)
+ 501          {
+ 502   1          g_reply_pending = 0;
+ 503   1          g_pending_channel = APP_CHANNEL_NONE;
+ 504   1          g_sample_state = APP_SAMPLE_IDLE;
+ 505   1      }
+ 506          
+ 507          /**
+ 508           * @brief 中止当前采样流程并恢复普通 Clear 模式
+ 509           * @note 若采样流程处于 IR 相关状态时，会关闭 IR 映射并重新启动积分。
+ 510           */
+ 511          static void App_AbortPendingSample(void)
+ 512          {
+ 513   1          if ((g_sample_state == APP_SAMPLE_WAIT_IR) ||
+ 514   1              (g_sample_state == APP_SAMPLE_WAIT_CLEAR_RECOVERY))
+ 515   1          {
+ 516   2              TCS3400_SetIRMapEnable(g_pending_bus, 0);
+ 517   2              TCS3400_RestartIntegration(g_pending_bus);
+ 518   2          }
+ 519   1          App_ClearPendingState();
+ 520   1      }
+ 521          
+ 522          /**
+ 523           * @brief 处理等待回复的采样流程状态机
+ 524           * @note 负责轮询 AVALID、通信错误、命令超时，并发送正常或异常响应。
+ 525           */
+ 526          static void App_PendingTask(void)
+ 527          {
+ 528   1          uint32 now;
+ 529   1          uint8 valid;
+ 530   1          uint16 r, g, b, c;
+ 531   1          uint16 value;
+ 532   1      
+ 533   1          if (!g_reply_pending)
+ 534   1              return;
+ 535   1          if (!g_sensor_inited)
+ 536   1              return;
+ 537   1      
+ 538   1          now = Timer0_GetMs();
+ 539   1      
+ 540   1          if (App_TimeReached(now, g_sample_deadline_ms))
+ 541   1          {
+ 542   2              App_SendErr();
+ 543   2              App_AbortPendingSample();
+ 544   2              return;
+ 545   2          }
+ 546   1      
+ 547   1          if (!App_TimeReached(now, g_sample_due_ms))
+ 548   1              return;
+ 549   1      
+C51 COMPILER V9.54   TCS3400_APP                                                           07/11/2026 11:22:11 PAGE 10  
+
+ 550   1          /*
+ 551   1           * IR 已经在上一状态成功读取，
+ 552   1           * 当前状态只等待普通 Clear 恢复时间。
+ 553   1           * 等够一帧后直接返回缓存 IR，不再检查第二帧 AVALID。
+ 554   1           */
+ 555   1          if (g_sample_state == APP_SAMPLE_WAIT_CLEAR_RECOVERY)
+ 556   1          {
+ 557   2              App_SendFloatFrame(g_pending_ir_value);
+ 558   2              App_ClearPendingState();
+ 559   2              return;
+ 560   2          }
+ 561   1      
+ 562   1          /* 普通 RGBC 帧和 IR 第一帧都需要检查 AVALID */
+ 563   1          if (!TCS3400_GetDataValid(g_pending_bus, &valid))
+ 564   1          {
+ 565   2              App_SendErr();
+ 566   2              App_AbortPendingSample();
+ 567   2              return;
+ 568   2          }
+ 569   1      
+ 570   1          if (!valid)
+ 571   1          {
+ 572   2              g_sample_due_ms = now + 5;
+ 573   2              return;
+ 574   2          }
+ 575   1      
+ 576   1          switch (g_sample_state)
+ 577   1          {
+ 578   2              case APP_SAMPLE_WAIT_RGBC:
+ 579   2                  if (!TCS3400_ReadRGBC_NoWait(g_pending_bus, &r, &g, &b, &c))
+ 580   2                  {
+ 581   3                      App_SendErr();
+ 582   3                      App_AbortPendingSample();
+ 583   3                      return;
+ 584   3                  }
+ 585   2      
+ 586   2                  switch (g_pending_channel)
+ 587   2                  {
+ 588   3                      case APP_CHANNEL_R:     value = r; break;
+ 589   3                      case APP_CHANNEL_G:     value = g; break;
+ 590   3                      case APP_CHANNEL_B:     value = b; break;
+ 591   3                      case APP_CHANNEL_CLEAR: value = c; break;
+ 592   3                      default:
+ 593   3                          App_SendErr();
+ 594   3                          App_AbortPendingSample();
+ 595   3                          return;
+ 596   3                  }
+ 597   2      
+ 598   2                  App_SendFloatFrame(value);
+ 599   2                  App_ClearPendingState();
+ 600   2                  break;
+ 601   2      
+ 602   2              case APP_SAMPLE_WAIT_IR:
+ 603   2                  /* IR 映射开启时，CDATAL/CDATAH 返回 IR 原始数据 */
+ 604   2                  if (!TCS3400_ReadClearPort_NoWait(g_pending_bus, &g_pending_ir_value))
+ 605   2                  {
+ 606   3                      App_SendErr();
+ 607   3                      App_AbortPendingSample();
+ 608   3                      return;
+ 609   3                  }
+ 610   2      
+ 611   2                  /* 关闭 IR 映射，恢复普通 Clear */
+C51 COMPILER V9.54   TCS3400_APP                                                           07/11/2026 11:22:11 PAGE 11  
+
+ 612   2                  if (!TCS3400_SetIRMapEnable(g_pending_bus, 0))
+ 613   2                  {
+ 614   3                      App_SendErr();
+ 615   3                      App_AbortPendingSample();
+ 616   3                      return;
+ 617   3                  }
+ 618   2      
+ 619   2                  /* 启动一帧普通 Clear 恢复积分 */
+ 620   2                  if (!TCS3400_RestartIntegration(g_pending_bus))
+ 621   2                  {
+ 622   3                      App_SendErr();
+ 623   3                      App_AbortPendingSample();
+ 624   3                      return;
+ 625   3                  }
+ 626   2      
+ 627   2                  now = Timer0_GetMs();
+ 628   2                  g_sample_due_ms = now + TCS3400_GetFrameWaitMs(g_pending_bus);
+ 629   2                  g_sample_deadline_ms = g_sample_due_ms + APP_REPLY_EXTRA_TIMEOUT_MS;
+ 630   2                  g_sample_state = APP_SAMPLE_WAIT_CLEAR_RECOVERY;
+ 631   2                  break;
+ 632   2      
+ 633   2              default:
+ 634   2                  App_SendErr();
+ 635   2                  App_AbortPendingSample();
+ 636   2                  break;
+ 637   2          }
+ 638   1      }
+ 639          
+ 640          /**
+ 641           * @brief 从 UART 接收缓冲区取字节并组装完整命令
+ 642           * @note 同时支持真实 CRLF 和字面量字符串 "\\r\\n" 作为行结束符
+ 643           */
+ 644          static void App_UartTask(void)
+ 645          {
+ 646   1          static char line[APP_LINE_MAX];
+ 647   1          static uint8 index = 0;
+ 648   1          static bit overflow = 0;
+ 649   1          static bit got_cr = 0;
+ 650   1          static bit format_error = 0;
+ 651   1      
+ 652   1          uint8 ch;
+ 653   1      
+ 654   1          while (Uart_ReadByte(&ch))
+ 655   1          {
+ 656   2              /* 识别字面量字符串 \\r\\n */
+ 657   2              if ((ch == 'n') && (index >= 3))
+ 658   2              {
+ 659   3                  if ((line[index - 3] == '\\') &&
+ 660   3                      (line[index - 2] == 'r') &&
+ 661   3                      (line[index - 1] == '\\'))
+ 662   3                  {
+ 663   4                      index -= 3;
+ 664   4                      if (format_error || overflow || index == 0)
+ 665   4                          App_SendErr();
+ 666   4                      else
+ 667   4                      {
+ 668   5                          line[index] = 0;
+ 669   5                          TCS3400_App_ProcessLine(line);
+ 670   5                      }
+ 671   4                      index = 0; overflow = 0; got_cr = 0; format_error = 0;
+ 672   4                      continue;
+ 673   4                  }
+C51 COMPILER V9.54   TCS3400_APP                                                           07/11/2026 11:22:11 PAGE 12  
+
+ 674   3              }
+ 675   2      
+ 676   2              if (ch == '\r')
+ 677   2              {
+ 678   3                  got_cr = 1;
+ 679   3                  continue;
+ 680   3              }
+ 681   2      
+ 682   2              if (ch == '\n')
+ 683   2              {
+ 684   3                  if (!got_cr)
+ 685   3                  {
+ 686   4                      App_SendErr();
+ 687   4                      index = 0; overflow = 0; format_error = 0;
+ 688   4                      continue;
+ 689   4                  }
+ 690   3      
+ 691   3                  if (format_error || overflow || index == 0)
+ 692   3                      App_SendErr();
+ 693   3                  else
+ 694   3                  {
+ 695   4                      line[index] = 0;
+ 696   4                      TCS3400_App_ProcessLine(line);
+ 697   4                  }
+ 698   3      
+ 699   3                  index = 0; overflow = 0; got_cr = 0; format_error = 0;
+ 700   3                  continue;
+ 701   3              }
+ 702   2      
+ 703   2              if (got_cr) { got_cr = 0; format_error = 1; }
+ 704   2              if (overflow) continue;
+ 705   2      
+ 706   2              if (index < (APP_LINE_MAX - 1))
+ 707   2                  line[index++] = (char)ch;
+ 708   2              else
+ 709   2              {
+ 710   3                  overflow = 1;
+ 711   3                  index = 0;
+ 712   3              }
+ 713   2          }
+ 714   1      }
+ 715          
+ 716          /*==============================================================================
+ 717           * 对外开放函数实现
+ 718           *============================================================================*/
+ 719          
+ 720          /**
+ 721           * @brief 处理一行完整的上位机命令
+ 722           * @param[in] line 以 '\0' 结尾的命令字符串，内容不包含 CRLF
+ 723           * @note 命令格式为 MTF:AA-FF-PPP，结果通过 UART 发送。
+ 724           */
+ 725          void TCS3400_App_ProcessLine(char *line)
+ 726          {
+ 727   1          I2C_Bus_t bus;
+ 728   1          uint8 aa;
+ 729   1          uint8 ff;
+ 730   1          uint8 sensor;
+ 731   1          uint8 channel_code;
+ 732   1          uint8 id;
+ 733   1          uint8 reg_value;
+ 734   1          uint8 gain_reg;
+ 735   1          uint16 gain_value;
+C51 COMPILER V9.54   TCS3400_APP                                                           07/11/2026 11:22:11 PAGE 13  
+
+ 736   1          uint16 time_ms;
+ 737   1          AppChannel_t channel;
+ 738   1      
+ 739   1          if (!App_CheckFrameFormat(line))
+ 740   1          {
+ 741   2              App_SendErr();
+ 742   2              return;
+ 743   2          }
+ 744   1      
+ 745   1          aa = App_ParseCode(line[4], line[5]);
+ 746   1          sensor = aa / 10;
+ 747   1          channel_code = aa % 10;
+ 748   1      
+ 749   1          if (g_reply_pending)
+ 750   1          {
+ 751   2              App_SendErr();
+ 752   2              return;
+ 753   2          }
+ 754   1      
+ 755   1          if ((sensor < 1) || (sensor > APP_CH_MAX) || (channel_code > 5))
+ 756   1          {
+ 757   2              App_SendErr();
+ 758   2              return;
+ 759   2          }
+ 760   1      
+ 761   1          bus = App_AA2Bus(sensor);
+ 762   1      
+ 763   1          if (!g_sensor_inited)
+ 764   1          {
+ 765   2              TCS3400_App_Init();
+ 766   2          }
+ 767   1      
+ 768   1          /* AA 个位 1~5：读取 R、G、B、Clear 或 IR；FF 仅作占位 */
+ 769   1          if ((channel_code >= 1) && (channel_code <= 5))
+ 770   1          {
+ 771   2              if (!App_CheckParamDigits(line))
+ 772   2              {
+ 773   3                  App_SendErr();
+ 774   3                  return;
+ 775   3              }
+ 776   2      
+ 777   2              if (!App_ReadID(bus, &id))
+ 778   2              {
+ 779   3                  App_SendErr();
+ 780   3                  return;
+ 781   3              }
+ 782   2      
+ 783   2              channel = App_CodeToChannel(channel_code);
+ 784   2              if (channel == APP_CHANNEL_NONE)
+ 785   2              {
+ 786   3                  App_SendErr();
+ 787   3                  return;
+ 788   3              }
+ 789   2      
+ 790   2              time_ms = App_ParseTimeMs(line);
+ 791   2      
+ 792   2              if (!App_StartCommandSample(bus, channel, time_ms))
+ 793   2                  App_SendErr();
+ 794   2      
+ 795   2              return;
+ 796   2          }
+ 797   1      
+C51 COMPILER V9.54   TCS3400_APP                                                           07/11/2026 11:22:11 PAGE 14  
+
+ 798   1          if (!App_IsDigit(line[7]) || !App_IsDigit(line[8]))
+ 799   1          {
+ 800   2              App_SendErr();
+ 801   2              return;
+ 802   2          }
+ 803   1      
+ 804   1          ff = App_ParseCode(line[7], line[8]);
+ 805   1      
+ 806   1          /* AA 个位 0，FF=97：读取传感器 ID */
+ 807   1          if (ff == 97)
+ 808   1          {
+ 809   2              if (App_ReadID(bus, &id))
+ 810   2                  App_SendFloatFrame((uint16)id);
+ 811   2              else
+ 812   2                  App_SendErr();
+ 813   2              return;
+ 814   2          }
+ 815   1      
+ 816   1          /* FF=98：设置并回读当前增益 */
+ 817   1          if (ff == 98)
+ 818   1          {
+ 819   2              if (!App_ParseGainParam(line, &gain_reg, &gain_value))
+ 820   2              {
+ 821   3                  App_SendErr();
+ 822   3                  return;
+ 823   3              }
+ 824   2      
+ 825   2              if (!TCS3400_SetGain(bus, gain_reg))
+ 826   2              {
+ 827   3                  App_SendErr();
+ 828   3                  return;
+ 829   3              }
+ 830   2      
+ 831   2              if (!TCS3400_ReadRegValue(bus, TCS3400_CONTROL, &reg_value))
+ 832   2              {
+ 833   3                  App_SendErr();
+ 834   3                  return;
+ 835   3              }
+ 836   2      
+ 837   2              gain_value = App_GainRegToValue(reg_value);
+ 838   2              if (gain_value == 0)
+ 839   2              {
+ 840   3                  App_SendErr();
+ 841   3                  return;
+ 842   3              }
+ 843   2      
+ 844   2              App_SendFloatFrame(gain_value);
+ 845   2              return;
+ 846   2          }
+ 847   1      
+ 848   1          /* FF=99：读取当前增益 */
+ 849   1          if (ff == 99)
+ 850   1          {
+ 851   2              if (TCS3400_ReadRegValue(bus, TCS3400_CONTROL, &reg_value))
+ 852   2                  App_SendFloatFrame(App_GainRegToValue(reg_value));
+ 853   2              else
+ 854   2                  App_SendErr();
+ 855   2              return;
+ 856   2          }
+ 857   1      
+ 858   1          /* 未定义的 FF 功能码 */
+ 859   1          App_SendErr();
+C51 COMPILER V9.54   TCS3400_APP                                                           07/11/2026 11:22:11 PAGE 15  
+
+ 860   1      }
+ 861          
+ 862          /**
+ 863           * @brief 初始化全部 4 路 TCS3400 传感器
+ 864           * @note 初始化通用 I2C、各路传感器以及应用层相关状态。
+ 865           */
+ 866          void TCS3400_App_Init(void)
+ 867          {
+ 868   1          uint8 i;
+ 869   1      
+ 870   1          Sensor_I2C_Init();
+ 871   1      
+ 872   1          for (i = 0; i < APP_CH_MAX; i++)
+ 873   1          {
+ 874   2              g_sample_time_ms[i] = 178;
+ 875   2              TCS3400_Init((I2C_Bus_t)i);
+ 876   2          }
+ 877   1      
+ 878   1          g_sample_state = APP_SAMPLE_IDLE;
+ 879   1          g_pending_channel = APP_CHANNEL_NONE;
+ 880   1          g_reply_pending = 0;
+ 881   1          g_sample_due_ms = Timer0_GetMs() + TCS3400_GetFrameWaitMs(SOFT_I2C_BUS_1);
+ 882   1      
+ 883   1          g_sensor_inited = 1;
+ 884   1      }
+ 885          
+ 886          /**
+ 887           * @brief 执行 TCS3400 应用层轮询任务
+ 888           * @note 需要在 main() 主循环中持续调用。
+ 889           */
+ 890          void TCS3400_App_Poll(void)
+ 891          {
+ 892   1          App_UartTask();
+ 893   1      
+ 894   1          if (g_reply_pending)
+ 895   1              App_PendingTask();
+ 896   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   2831    ----
+   CONSTANT SIZE    =      3    ----
+   XDATA SIZE       =     42      80
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      5    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

@@ -1,0 +1,238 @@
+C51 COMPILER V9.54   MODBUS_UART2                                                          06/29/2026 17:41:21 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE MODBUS_UART2
+OBJECT MODULE PLACED IN System\modbus_uart2.OBJ
+COMPILER INVOKED BY: D:\Keil_v5\C51\BIN\C51.exe System\modbus_uart2.c LARGE WARNINGLEVEL(2) INCDIR(.,.\Hardware,.\System
+                    -,.\User,.\App,.\Control,D:\Keil_v5\C51\INC\STC) OBJECTEXTEND
+
+line level    source
+
+   1          /**
+   2           * @file modbus_uart2.c
+   3           * @brief UART2 + 485 基础收发驱动实现
+   4           *
+   5           * @details
+   6           * 本模块负责：
+   7           *  - UART2 初始化
+   8           *  - UART2 接收中断与环形缓冲区
+   9           *  - 485 方向控制
+  10           *  - 原始 Modbus 帧收发入口
+  11           *
+  12           * 不负责具体压力传感器寄存器协议解析。
+  13           */
+  14          
+  15          #include "modbus_uart2.h"
+  16          
+  17          /*==============================================================================
+  18           * 宏定义
+  19           *============================================================================*/
+  20          
+  21          #define UART2_TX_TIMEOUT   60000u
+  22          #define UART2_RX_BUF_SIZE  64
+  23          #define UART2_RX_BUF_MASK  (UART2_RX_BUF_SIZE - 1)
+  24          
+  25          /* UART2 使用 P1.0/P1.1 */
+  26          #define UART2_PIN_SEL      UART2_S1
+  27          
+  28          /* 115200bps @ 22.1184MHz, Timer2 1T */
+  29          #define UART2_BRT_H        0xFF
+  30          #define UART2_BRT_L        0xD0
+  31          
+  32          /*==============================================================================
+  33           * 模块内部变量
+  34           *============================================================================*/
+  35          
+  36          static volatile uint8 idata g_uart2_rx_buf[UART2_RX_BUF_SIZE];
+  37          static volatile uint8 g_uart2_rx_wptr = 0;
+  38          static volatile uint8 g_uart2_rx_rptr = 0;
+  39          
+  40          /*==============================================================================
+  41           * 模块内部函数声明
+  42           *============================================================================*/
+  43          
+  44          static void ModbusUart2_PinInit(void);
+  45          static void ModbusUart2_SetTxMode(void);
+  46          static void ModbusUart2_SetRxMode(void);
+  47          static bit ModbusUart2_SendByte(uint8 dat);
+  48          
+  49          /*==============================================================================
+  50           * 模块内部函数实现
+  51           *============================================================================*/
+  52          
+  53          static void ModbusUart2_PinInit(void)
+  54          {
+C51 COMPILER V9.54   MODBUS_UART2                                                          06/29/2026 17:41:21 PAGE 2   
+
+  55   1          /* UART2 选择 P1.0=RXD2, P1.1=TXD2 */
+  56   1          P_SW2 &= (uint8)(~UART2_S2);
+  57   1          P_SW2 |= UART2_PIN_SEL;
+  58   1      
+  59   1          /* P1.0 准双向输入，P1.1 推挽输出 */
+  60   1          P1 |= 0x03;
+  61   1          P1M1 &= (uint8)(~0x03);
+  62   1          P1M0 = (uint8)((P1M0 & (uint8)(~0x03)) | 0x02);
+  63   1      
+  64   1          /* P0.7 推挽输出，作为 485 方向控制 */
+  65   1          P0 |= 0x80;
+  66   1          P0M1 &= (uint8)(~0x80);
+  67   1          P0M0 |= 0x80;
+  68   1      }
+  69          
+  70          static void ModbusUart2_SetTxMode(void)
+  71          {
+  72   1          P07 = 1;
+  73   1      }
+  74          
+  75          static void ModbusUart2_SetRxMode(void)
+  76          {
+  77   1          P07 = 0;
+  78   1      }
+  79          
+  80          static bit ModbusUart2_SendByte(uint8 dat)
+  81          {
+  82   1          uint16 timeout;
+  83   1      
+  84   1          S2CON &= (uint8)(~S2TI);
+  85   1          S2BUF = dat;
+  86   1      
+  87   1          timeout = UART2_TX_TIMEOUT;
+  88   1          while ((S2CON & S2TI) == 0)
+  89   1          {
+  90   2              if (--timeout == 0)
+  91   2              {
+  92   3                  return 0;
+  93   3              }
+  94   2          }
+  95   1      
+  96   1          S2CON &= (uint8)(~S2TI);
+  97   1          return 1;
+  98   1      }
+  99          
+ 100          /*==============================================================================
+ 101           * 对外开放函数实现
+ 102           *============================================================================*/
+ 103          
+ 104          void ModbusUart2_Init(void)
+ 105          {
+ 106   1          ModbusUart2_PinInit();
+ 107   1      
+ 108   1          g_uart2_rx_wptr = 0;
+ 109   1          g_uart2_rx_rptr = 0;
+ 110   1      
+ 111   1          /* UART2 模式1，8位数据，可变波特率，允许接收 */
+ 112   1          S2CON = S2SM1 | S2REN;
+ 113   1      
+ 114   1          /* Timer2 作为 UART2 波特率发生器，工作在 1T 模式 */
+ 115   1          AUXR &= (uint8)(~T2R);
+ 116   1          AUXR |= T2x12;
+C51 COMPILER V9.54   MODBUS_UART2                                                          06/29/2026 17:41:21 PAGE 3   
+
+ 117   1      
+ 118   1          T2H = UART2_BRT_H;
+ 119   1          T2L = UART2_BRT_L;
+ 120   1          AUXR |= T2R;
+ 121   1      
+ 122   1          /* 清 UART2 收发标志 */
+ 123   1          S2CON &= (uint8)(~(S2RI | S2TI));
+ 124   1      
+ 125   1          /* 开启 UART2 中断 */
+ 126   1          IE2 |= ES2;
+ 127   1      
+ 128   1          /* 默认保持接收方向 */
+ 129   1          ModbusUart2_SetRxMode();
+ 130   1      }
+ 131          
+ 132          void ModbusUart2_Poll(void)
+ 133          {
+ 134   1          /* 当前底层无额外轮询任务，保留此接口供后续扩展 */
+ 135   1      }
+ 136          
+ 137          bit ModbusUart2_ReadByte(uint8 *dat)
+ 138          {
+ 139   1          uint8 rptr;
+ 140   1      
+ 141   1          if (dat == 0)
+ 142   1          {
+ 143   2              return 0;
+ 144   2          }
+ 145   1      
+ 146   1          rptr = g_uart2_rx_rptr;
+ 147   1          if (rptr == g_uart2_rx_wptr)
+ 148   1          {
+ 149   2              return 0;
+ 150   2          }
+ 151   1      
+ 152   1          *dat = g_uart2_rx_buf[rptr];
+ 153   1          g_uart2_rx_rptr = (uint8)((rptr + 1) & UART2_RX_BUF_MASK);
+ 154   1      
+ 155   1          return 1;
+ 156   1      }
+ 157          
+ 158          bit ModbusUart2_SendFrame(const uint8 *buf, uint16 len)
+ 159          {
+ 160   1          uint16 i;
+ 161   1      
+ 162   1          if ((buf == 0) || (len == 0))
+ 163   1          {
+ 164   2              return 0;
+ 165   2          }
+ 166   1      
+ 167   1          ModbusUart2_SetTxMode();
+ 168   1      
+ 169   1          for (i = 0; i < len; i++)
+ 170   1          {
+ 171   2              if (!ModbusUart2_SendByte(buf[i]))
+ 172   2              {
+ 173   3                  ModbusUart2_SetRxMode();
+ 174   3                  return 0;
+ 175   3              }
+ 176   2          }
+ 177   1      
+ 178   1          ModbusUart2_SetRxMode();
+C51 COMPILER V9.54   MODBUS_UART2                                                          06/29/2026 17:41:21 PAGE 4   
+
+ 179   1          return 1;
+ 180   1      }
+ 181          
+ 182          /*==============================================================================
+ 183           * 中断服务函数实现
+ 184           *============================================================================*/
+ 185          
+ 186          void Uart2_Isr(void) interrupt 8
+ 187          {
+ 188   1          uint8 dat;
+ 189   1          uint8 next;
+ 190   1      
+ 191   1          if (S2CON & S2RI)
+ 192   1          {
+ 193   2              dat = S2BUF;
+ 194   2              S2CON &= (uint8)(~S2RI);
+ 195   2      
+ 196   2              next = (uint8)((g_uart2_rx_wptr + 1) & UART2_RX_BUF_MASK);
+ 197   2              if (next != g_uart2_rx_rptr)
+ 198   2              {
+ 199   3                  g_uart2_rx_buf[g_uart2_rx_wptr] = dat;
+ 200   3                  g_uart2_rx_wptr = next;
+ 201   3              }
+ 202   2          }
+ 203   1      
+ 204   1          if (S2CON & S2TI)
+ 205   1          {
+ 206   2              S2CON &= (uint8)(~S2TI);
+ 207   2          }
+ 208   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    307    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =      2       5
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =     64    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
