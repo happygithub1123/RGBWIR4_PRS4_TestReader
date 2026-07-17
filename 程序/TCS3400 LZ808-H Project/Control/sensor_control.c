@@ -1,0 +1,144 @@
+#include "sensor_control.h"
+#include "tcs3400_control.h"
+#include "pressure_control.h"
+
+/*==============================================================================
+ 内部定义
+ *============================================================================*/
+
+typedef enum
+{
+    SENSOR_SOURCE_NONE = 0,
+    SENSOR_SOURCE_TCS3400,
+    SENSOR_SOURCE_PRESSURE
+} SensorSource_t;
+
+static SensorSource_t g_sensor_source;
+
+/*==============================================================================
+ 对外函数
+ *============================================================================*/
+
+/**
+ * @brief  初始化统一传感器控制器
+ * @param  无
+ * @retval 无
+ */
+void SensorControl_Init(void)
+{
+    Tcs3400Control_Init();
+    PressureControl_Init();
+    g_sensor_source = SENSOR_SOURCE_NONE;
+}
+
+/**
+ * @brief  按AB命令启动传感器操作
+ * @param  command AB十进制命令码
+ * @param  parameter EFG参数
+ * @retval 1：命令已接收；0：命令、参数或忙状态错误
+ */
+bit SensorControl_Start(uint8 command, uint16 parameter)
+{
+    uint8 sensor;
+    uint8 operation;
+
+    if (SensorControl_IsBusy())
+    {
+        return 0;
+    }
+
+    if ((command >= 10u) && (command <= 49u))
+    {
+        sensor = command / 10u;
+        operation = command % 10u;
+        if (!Tcs3400Control_Start(sensor, operation, parameter))
+        {
+            return 0;
+        }
+
+        g_sensor_source = SENSOR_SOURCE_TCS3400;
+        return 1;
+    }
+
+    if ((command == MTF_COMMAND_PRESSURE_READ) &&
+        (parameter >= MODBUS_SLAVE_ADDRESS_MIN) &&
+        (parameter <= MODBUS_SLAVE_ADDRESS_MAX))
+    {
+        if (!PressureControl_StartRead((uint8)parameter))
+        {
+            return 0;
+        }
+        g_sensor_source = SENSOR_SOURCE_PRESSURE;
+        return 1;
+    }
+
+    if ((command == MTF_COMMAND_PRESSURE_ZERO) &&
+        (parameter >= MODBUS_SLAVE_ADDRESS_MIN) &&
+        (parameter <= MODBUS_SLAVE_ADDRESS_MAX))
+    {
+        if (!PressureControl_StartZero((uint8)parameter))
+        {
+            return 0;
+        }
+        g_sensor_source = SENSOR_SOURCE_PRESSURE;
+        return 1;
+    }
+
+    return 0;
+}
+
+/**
+ * @brief  轮询当前传感器操作
+ * @param  无
+ * @retval 无
+ */
+void SensorControl_Poll(void)
+{
+    if (g_sensor_source == SENSOR_SOURCE_TCS3400)
+    {
+        Tcs3400Control_Poll();
+    }
+    else if (g_sensor_source == SENSOR_SOURCE_PRESSURE)
+    {
+        PressureControl_Poll();
+    }
+}
+
+/**
+ * @brief  获取并消费当前传感器操作结果
+ * @param  value 正常结果存放地址
+ * @retval 当前操作结果
+ */
+ProjectAsyncResult_t SensorControl_TakeResult(float *value)
+{
+    ProjectAsyncResult_t result;
+
+    if (g_sensor_source == SENSOR_SOURCE_TCS3400)
+    {
+        result = Tcs3400Control_TakeResult(value);
+    }
+    else if (g_sensor_source == SENSOR_SOURCE_PRESSURE)
+    {
+        result = PressureControl_TakeResult(value);
+    }
+    else
+    {
+        return PROJECT_ASYNC_RESULT_NONE;
+    }
+
+    if (result != PROJECT_ASYNC_RESULT_NONE)
+    {
+        g_sensor_source = SENSOR_SOURCE_NONE;
+    }
+    return result;
+}
+
+/**
+ * @brief  查询统一控制器忙状态
+ * @param  无
+ * @retval 1：正在处理命令或结果待取；0：空闲
+ */
+bit SensorControl_IsBusy(void)
+{
+    return (g_sensor_source != SENSOR_SOURCE_NONE);
+}

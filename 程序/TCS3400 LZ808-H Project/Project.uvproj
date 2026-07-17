@@ -315,7 +315,7 @@
             <UseInterruptVector>1</UseInterruptVector>
             <Fuzzy>3</Fuzzy>
             <Optimize>8</Optimize>
-            <WarningLevel>0</WarningLevel>
+            <WarningLevel>2</WarningLevel>
             <SizeSpeed>1</SizeSpeed>
             <ObjectExtend>1</ObjectExtend>
             <ACallAJmp>0</ACallAJmp>
@@ -324,7 +324,7 @@
               <MiscControls></MiscControls>
               <Define></Define>
               <Undefine></Undefine>
-              <IncludePath>.\Hardware;.\System;.\User;.\App;.\Control</IncludePath>
+              <IncludePath>.\User;.\App;.\Control;.\Hardware;.\System;.\Public</IncludePath>
             </VariousControls>
           </C51>
           <Ax51>
@@ -384,12 +384,87 @@
           </Files>
         </Group>
         <Group>
+          <GroupName>App</GroupName>
+          <Files>
+            <File>
+              <FileName>app_comm.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\App\app_comm.c</FilePath>
+            </File>
+            <File>
+              <FileName>mtf_protocol.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\App\mtf_protocol.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Control</GroupName>
+          <Files>
+            <File>
+              <FileName>sensor_control.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Control\sensor_control.c</FilePath>
+            </File>
+            <File>
+              <FileName>tcs3400_control.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Control\tcs3400_control.c</FilePath>
+            </File>
+            <File>
+              <FileName>pressure_control.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Control\pressure_control.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Hardware</GroupName>
+          <Files>
+            <File>
+              <FileName>soft_i2c.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Hardware\soft_i2c.c</FilePath>
+            </File>
+            <File>
+              <FileName>tcs3400_driver.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Hardware\tcs3400_driver.c</FilePath>
+            </File>
+            <File>
+              <FileName>modbus_rtu.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Hardware\modbus_rtu.c</FilePath>
+            </File>
+            <File>
+              <FileName>pressure_meter.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Hardware\pressure_meter.c</FilePath>
+            </File>
+            <File>
+              <FileName>input_follow.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Hardware\input_follow.c</FilePath>
+            </File>
+            <File>
+              <FileName>run_led.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Hardware\run_led.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
           <GroupName>System</GroupName>
           <Files>
             <File>
-              <FileName>Uart.c</FileName>
+              <FileName>System.c</FileName>
               <FileType>1</FileType>
-              <FilePath>.\System\Uart.c</FilePath>
+              <FilePath>.\System\System.c</FilePath>
+            </File>
+            <File>
+              <FileName>Xtalselect.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\System\Xtalselect.c</FilePath>
             </File>
             <File>
               <FileName>GPIO.c</FileName>
@@ -402,64 +477,49 @@
               <FilePath>.\System\Timer0.c</FilePath>
             </File>
             <File>
-              <FileName>Wdt.c</FileName>
+              <FileName>Uart1.c</FileName>
               <FileType>1</FileType>
-              <FilePath>.\System\Wdt.c</FilePath>
-            </File>
-            <File>
-              <FileName>Public_cfg.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\System\Public_cfg.c</FilePath>
-            </File>
-            <File>
-              <FileName>i2c_bus.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\System\i2c_bus.c</FilePath>
+              <FilePath>.\System\Uart1.c</FilePath>
             </File>
             <File>
               <FileName>Uart2.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\System\Uart2.c</FilePath>
             </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>Hardware</GroupName>
-          <Files>
             <File>
-              <FileName>tcs3400_driver.c</FileName>
+              <FileName>Rs485.c</FileName>
               <FileType>1</FileType>
-              <FilePath>.\Hardware\tcs3400_driver.c</FilePath>
+              <FilePath>.\System\Rs485.c</FilePath>
             </File>
             <File>
-              <FileName>modbus_uart2.c</FileName>
+              <FileName>Delay.c</FileName>
               <FileType>1</FileType>
-              <FilePath>.\Hardware\modbus_uart2.c</FilePath>
+              <FilePath>.\System\Delay.c</FilePath>
             </File>
           </Files>
         </Group>
         <Group>
-          <GroupName>App</GroupName>
+          <GroupName>Public</GroupName>
           <Files>
             <File>
-              <FileName>tcs3400_app.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\App\tcs3400_app.c</FilePath>
+              <FileName>Public_cfg.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\Public\Public_cfg.h</FilePath>
             </File>
             <File>
-              <FileName>pressure_sensor_app.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\App\pressure_sensor_app.c</FilePath>
+              <FileName>project_types.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\Public\project_types.h</FilePath>
             </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>Control</GroupName>
-          <Files>
             <File>
-              <FileName>action_control.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\Control\action_control.c</FilePath>
+              <FileName>board_config.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\Public\board_config.h</FilePath>
+            </File>
+            <File>
+              <FileName>protocol_config.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\Public\protocol_config.h</FilePath>
             </File>
           </Files>
         </Group>

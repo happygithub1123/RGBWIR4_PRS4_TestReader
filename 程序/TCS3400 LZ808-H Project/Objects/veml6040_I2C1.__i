@@ -1,1 +1,0 @@
-"System\veml6040_I2C1.c" LARGE WARNINGLEVEL (0) OPTIMIZE (8,SPEED) BROWSE INCDIR(.\Hardware;.\System;.\User;.\App) DEBUG OBJECTEXTEND PRINT(.\Listings\veml6040_I2C1.lst) OBJECT(.\Objects\veml6040_I2C1.obj)
