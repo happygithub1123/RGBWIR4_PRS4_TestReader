@@ -14,3 +14,6 @@
 *.uvguix.*
 *.uvgui.*
 *.bak
+
+# Local integration records
+/联调验证.md
