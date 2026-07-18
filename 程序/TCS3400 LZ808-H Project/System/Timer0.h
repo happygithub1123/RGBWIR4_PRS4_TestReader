@@ -3,10 +3,8 @@
 
 #include "Public_cfg.h"
 
-/* 初始化Timer0，提供1ms系统节拍，并驱动P5.4运行指示灯 */
-void TM0_Init(void);
-
-/* 返回系统运行毫秒数，用于非阻塞任务调度 */
-uint32 Timer0_GetMs(void);
+void TM0_Init(void);                                      /* 初始化1ms系统时基。 */
+uint32 Timer0_GetMs(void);                                /* 获取系统毫秒计数。 */
+bit Timer0_HasElapsed(uint32 start_ms, uint16 period_ms); /* 判断指定时间是否到达。 */
 
 #endif

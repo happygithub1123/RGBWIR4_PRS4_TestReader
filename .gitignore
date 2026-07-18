@@ -1,0 +1,16 @@
+# Keil C51 generated files
+程序/TCS3400 LZ808-H Project/Objects/*
+!程序/TCS3400 LZ808-H Project/Objects/.gitkeep
+程序/TCS3400 LZ808-H Project/Listings/*
+!程序/TCS3400 LZ808-H Project/Listings/.gitkeep
+
+*.[Ll][Ss][Tt]
+*.[Oo][Bb][Jj]
+*.[Mm]51
+*.[Ll][Nn][Pp]
+*.[Hh][Ee][Xx]
+*.build_log.htm
+*.uvopt*
+*.uvguix.*
+*.uvgui.*
+*.bak

@@ -1,56 +1,67 @@
 #include "Timer0.h"
 
-/* P5.4 运行指示灯计数器，单位ms */
-static uint16 g_run_led_ms = 0;
+/*==============================================================================
+ 内部定义
+ *============================================================================*/
 
-/* 系统节拍计数器，供App层等待和后台采样使用 */
-static volatile uint32 g_system_ms = 0;
+static volatile uint32 g_system_ms;
 
+/*==============================================================================
+ 对外函数
+ *============================================================================*/
+
+/**
+ * @brief  初始化定时器0为1ms系统时基
+ * @param  无
+ * @retval 无
+ */
 void TM0_Init(void)
 {
-    /* P5.4 初始化为推挽输出，驱动运行指示灯 */
-    P54 = 0;
-    P5M1 &= ~0x10;
-    P5M0 |= 0x10;
-
-    /* Timer0 使用 1T 模式16位自动重装*/
-    AUXR |= 0x80;
-    TMOD &= 0xF0;
-
-    /*
-     * 内部 22.1184MHz,1T模式下，1ms约22118计数脉冲     * 重装值 = 65536 - 22118 = 0xA99A     */
-    TH0 = 0xA9;
-    TL0 = 0x9A;
-
-    /* 清零溢出标志，开启Timer0中断，启动Timer0 */
-    TF0 = 0;
-    ET0 = 1;
-    TR0 = 1;
+    g_system_ms = 0UL; // 中断与主循环共享的毫秒时基
+    AUXR |= 0x80u;     // Timer0使用1T模式
+    TMOD &= 0xF0u;     // Timer0配置为16位自动重装模式
+    TH0 = 0xA9u;       // 22.1184 MHz下1 ms重装高字节
+    TL0 = 0x9Au;       // 22.1184 MHz下1 ms重装低字节
+    TF0 = 0;           // 清除启动前溢出标志
+    ET0 = 1;           // 允许Timer0中断
+    TR0 = 1;           // 启动Timer0
 }
 
+/**
+ * @brief  获取系统毫秒计数
+ * @param  无
+ * @retval 当前毫秒计数
+ */
 uint32 Timer0_GetMs(void)
 {
-    uint32 now;
-    bit old_ea;
+    bit ea_state;
+    uint32 current_ms;
 
-    /* 读取32位系统运行毫秒数时关中断，防止中断中途修改*/
-    old_ea = EA;
-    EA = 0;
-    now = g_system_ms;
-    EA = old_ea;
-
-    return now;
+    ea_state = EA;
+    EA = 0; // 临界区保证32位计数读取不会被中断拆分
+    current_ms = g_system_ms;
+    EA = ea_state;
+    return current_ms;
 }
 
+/**
+ * @brief  判断指定时间间隔是否已经到达
+ * @param  start_ms 起始毫秒计数
+ * @param  period_ms 目标间隔，单位ms
+ * @retval 1：已到达；0：未到达
+ */
+bit Timer0_HasElapsed(uint32 start_ms, uint16 period_ms)
+{
+    // 无符号时间差允许32位毫秒计数自然回绕
+    return ((uint32)(Timer0_GetMs() - start_ms) >= (uint32)period_ms);
+}
+
+/**
+ * @brief  定时器0中断服务函数
+ * @param  无
+ * @retval 无
+ */
 void TM0_Isr(void) interrupt 1
 {
-    /* 每次中断累加1ms系统节拍*/
     g_system_ms++;
-
-    /* P5.4 每500ms翻转一次，用于确认程序正常运行 */
-    if (++g_run_led_ms >= 1000)
-    {
-        g_run_led_ms = 0;
-        P54 = !P54;
-    }
 }

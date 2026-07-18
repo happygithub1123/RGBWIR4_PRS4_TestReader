@@ -3,7 +3,6 @@
 
 #include "Public_cfg.h"
 
-extern void GPIO_Init(void);
-extern void Pxup_Init(void);
+void GPIO_Init(void);  /* 初始化板级GPIO模式和I2C上拉。 */
 
 #endif
