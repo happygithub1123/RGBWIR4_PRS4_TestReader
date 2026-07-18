@@ -49,38 +49,41 @@ static SoftI2C_Bus_t Tcs3400Control_GetBus(uint8 sensor_index)
 }
 
 /**
- * @brief  查找五档积分时间配置
+ * @brief  查找六档积分时间配置
  * @param  parameter MTF积分时间参数
  * @param  atime ATIME寄存器值存放地址
  * @param  wait_ms 最大帧等待时间存放地址
- * @param  actual_ms 典型积分时间存放地址
- * @retval 1：参数属于五档之一；0：非法参数
+ * @param  reply_ms 协议档位返回值存放地址
+ * @retval 1：参数属于六档之一；0：非法参数
  */
 static bit Tcs3400Control_GetIntegrationConfig(uint16 parameter, uint8 *atime,
-                                                uint16 *wait_ms, float *actual_ms)
+                                                uint16 *wait_ms, float *reply_ms)
 {
-    if ((atime == 0) || (wait_ms == 0) || (actual_ms == 0))
+    if ((atime == 0) || (wait_ms == 0) || (reply_ms == 0))
     {
         return 0;
     }
 
-    // 只接受协议定义的五档；等待上限包含积分时间和通信余量
+    // 只接受协议定义的六档；等待上限包含积分时间和通信余量
     switch (parameter)
     {
         case 3u:
-            *atime = 0xFFu; *wait_ms = 13u; *actual_ms = 2.78f;
+            *atime = 0xFFu; *wait_ms = 13u; *reply_ms = 2.78f;
             return 1;
         case 28u:
-            *atime = 0xF6u; *wait_ms = 40u; *actual_ms = 27.8f;
+            *atime = 0xF6u; *wait_ms = 40u; *reply_ms = 27.8f;
+            return 1;
+        case 51u:
+            *atime = 0xEEu; *wait_ms = 63u; *reply_ms = 51.0f;
             return 1;
         case 103u:
-            *atime = 0xDBu; *wait_ms = 119u; *actual_ms = 103.0f;
+            *atime = 0xDBu; *wait_ms = 119u; *reply_ms = 103.0f;
             return 1;
         case 178u:
-            *atime = 0xC0u; *wait_ms = 198u; *actual_ms = 178.0f;
+            *atime = 0xC0u; *wait_ms = 198u; *reply_ms = 178.0f;
             return 1;
         case 712u:
-            *atime = 0x00u; *wait_ms = 761u; *actual_ms = 712.0f;
+            *atime = 0x00u; *wait_ms = 761u; *reply_ms = 712.0f;
             return 1;
         default:
             return 0;
@@ -237,7 +240,7 @@ static bit Tcs3400Control_EnsureInitialized(uint8 sensor_index)
         return 1;
     }
 
-    // 断线重接后按该路缓存配置重新初始化，初次上电缓存即为178ms和16x
+    // 断线重接后按该路缓存配置重新初始化，初次上电缓存即为27.8ms和4x
     if (!TCS3400_Init(Tcs3400Control_GetBus(sensor_index),
                       sensor_state->atime,
                       sensor_state->gain_register))
@@ -280,8 +283,8 @@ void Tcs3400Control_Init(void)
     {
         g_tcs_sensor[index].atime = TCS3400_DEFAULT_ATIME_REGISTER;
         g_tcs_sensor[index].gain_register = TCS3400_DEFAULT_GAIN_REGISTER;
-        g_tcs_sensor[index].integration_parameter = TCS3400_DEFAULT_INTEGRATION_MS;
-        g_tcs_sensor[index].frame_wait_ms = 198u;
+        g_tcs_sensor[index].integration_parameter = TCS3400_DEFAULT_INTEGRATION_PARAMETER;
+        g_tcs_sensor[index].frame_wait_ms = TCS3400_DEFAULT_FRAME_WAIT_MS;
         g_tcs_sensor[index].initialized = 0u;
         g_tcs_sensor[index].communication_ok = 0u;
         g_tcs_sensor[index].data_valid = 0u;
@@ -320,7 +323,7 @@ bit Tcs3400Control_Start(uint8 target_code, uint8 function_code, uint16 paramete
     sensor_index = (uint8)(target_code - 1u);
     g_tcs_task_sensor = sensor_index;
 
-    // x0设置五档积分时间，写入成功后才更新该路缓存
+    // x0设置六档积分时间，写入成功后才更新该路缓存
     if (function_code == 0u)
     {
         if (!Tcs3400Control_GetIntegrationConfig(parameter, &register_value,
