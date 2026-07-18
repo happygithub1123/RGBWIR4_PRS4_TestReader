@@ -40,12 +40,14 @@ bit PressureMeter_Start(PressureMeterOperation_t operation, uint8 slave)
 {
     bit started;
 
+    // 旧结果未消费或Modbus事务未结束时禁止覆盖操作类型
     if ((g_pressure_meter_result != PRESSURE_METER_RESULT_NONE) ||
         ModbusRtu_IsBusy())
     {
         return 0;
     }
 
+    // 将业务操作转换为仪表固定寄存器或线圈请求
     if (operation == PRESSURE_METER_READ_VALUE)
     {
         started = ModbusRtu_StartReadHolding(slave, PRESSURE_VALUE_REGISTER, 1u);
@@ -94,6 +96,7 @@ void PressureMeter_Poll(void)
         return;
     }
 
+    // 读保持寄存器响应必须为1个寄存器、7字节固定帧
     if ((g_pressure_meter_operation == PRESSURE_METER_READ_VALUE) ||
         (g_pressure_meter_operation == PRESSURE_METER_READ_DECIMAL))
     {
@@ -103,10 +106,11 @@ void PressureMeter_Poll(void)
             return;
         }
 
-        g_pressure_meter_value = (int16)(((uint16)frame[3] << 8) | frame[4]);
+        g_pressure_meter_value = (int16)(((uint16)frame[3] << 8) | frame[4]); // Modbus大端有符号值
     }
     else
     {
+        // 清零成功必须完整回显写单线圈地址和值
         if ((length != 8u) || (frame[1] != 0x05u) ||
             (frame[2] != 0x00u) || (frame[3] != 0x00u) ||
             (frame[4] != 0xFFu) || (frame[5] != 0x00u))
@@ -145,6 +149,6 @@ PressureMeterResult_t PressureMeter_TakeResult(int16 *value)
         result = PRESSURE_METER_RESULT_ERROR;
     }
 
-    g_pressure_meter_result = PRESSURE_METER_RESULT_NONE;
+    g_pressure_meter_result = PRESSURE_METER_RESULT_NONE; // 结果只允许消费一次
     return result;
 }

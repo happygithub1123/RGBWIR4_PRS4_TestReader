@@ -13,14 +13,14 @@
 #define SOFT_I2C_CLOCK_HIGH_DELAY   144u
 #define SOFT_I2C_CLOCK_LOW_DELAY    180u
 
-sbit SOFT_I2C_1_SCL = P2 ^ 5;
-sbit SOFT_I2C_1_SDA = P2 ^ 6;
-sbit SOFT_I2C_2_SCL = P4 ^ 5;
-sbit SOFT_I2C_2_SDA = P4 ^ 6;
-sbit SOFT_I2C_3_SCL = P0 ^ 1;
-sbit SOFT_I2C_3_SDA = P0 ^ 2;
-sbit SOFT_I2C_4_SCL = P0 ^ 4;
-sbit SOFT_I2C_4_SDA = P5 ^ 2;
+sbit SOFT_I2C_1_SCL = P0 ^ 4;
+sbit SOFT_I2C_1_SDA = P5 ^ 2;
+sbit SOFT_I2C_2_SCL = P0 ^ 1;
+sbit SOFT_I2C_2_SDA = P0 ^ 2;
+sbit SOFT_I2C_3_SCL = P4 ^ 5;
+sbit SOFT_I2C_3_SDA = P4 ^ 6;
+sbit SOFT_I2C_4_SCL = P2 ^ 5;
+sbit SOFT_I2C_4_SDA = P2 ^ 6;
 
 /**
  * @brief  执行软件I2C时序延时
@@ -105,10 +105,10 @@ static bit SoftI2C_GetSda(SoftI2C_Bus_t bus)
  */
 static void SoftI2C_Start(SoftI2C_Bus_t bus)
 {
-    SoftI2C_SetSda(bus, 1);
-    SoftI2C_SetScl(bus, 1);
+    SoftI2C_SetSda(bus, 1); // 先释放数据线
+    SoftI2C_SetScl(bus, 1); // 确保时钟线为高
     SoftI2C_Delay(SOFT_I2C_START_SETUP_DELAY);
-    SoftI2C_SetSda(bus, 0);
+    SoftI2C_SetSda(bus, 0); // SCL高电平期间SDA下降形成START
     SoftI2C_Delay(SOFT_I2C_START_HOLD_DELAY);
     SoftI2C_SetScl(bus, 0);
 }
@@ -123,7 +123,7 @@ static void SoftI2C_Stop(SoftI2C_Bus_t bus)
     SoftI2C_SetSda(bus, 0);
     SoftI2C_SetScl(bus, 1);
     SoftI2C_Delay(SOFT_I2C_STOP_SETUP_DELAY);
-    SoftI2C_SetSda(bus, 1);
+    SoftI2C_SetSda(bus, 1); // SCL高电平期间SDA上升形成STOP
     SoftI2C_Delay(SOFT_I2C_BUS_FREE_DELAY);
 }
 
@@ -136,11 +136,11 @@ static bit SoftI2C_WaitAck(SoftI2C_Bus_t bus)
 {
     bit acknowledged;
 
-    SoftI2C_SetSda(bus, 1);
+    SoftI2C_SetSda(bus, 1); // 释放SDA，由从机在第9个时钟拉低
     SoftI2C_Delay(SOFT_I2C_DATA_SETUP_DELAY);
     SoftI2C_SetScl(bus, 1);
     SoftI2C_Delay(SOFT_I2C_CLOCK_HIGH_DELAY);
-    acknowledged = (SoftI2C_GetSda(bus) == 0);
+    acknowledged = (SoftI2C_GetSda(bus) == 0); // 低电平表示ACK
     SoftI2C_SetScl(bus, 0);
     SoftI2C_Delay(SOFT_I2C_CLOCK_LOW_DELAY);
     return acknowledged;
@@ -156,6 +156,7 @@ static bit SoftI2C_SendByte(SoftI2C_Bus_t bus, uint8 dat)
 {
     uint8 bit_index;
 
+    // 按MSB优先发送，每位在SCL低电平期间更新SDA
     for (bit_index = 0u; bit_index < 8u; bit_index++)
     {
         SoftI2C_SetSda(bus, (dat & 0x80u) != 0u);
@@ -183,7 +184,7 @@ static uint8 SoftI2C_ReadByte(SoftI2C_Bus_t bus, bit acknowledge)
     uint8 dat;
 
     dat = 0u;
-    SoftI2C_SetSda(bus, 1);
+    SoftI2C_SetSda(bus, 1); // 释放SDA后由从机驱动数据位
 
     for (bit_index = 0u; bit_index < 8u; bit_index++)
     {
@@ -198,7 +199,7 @@ static uint8 SoftI2C_ReadByte(SoftI2C_Bus_t bus, bit acknowledge)
         SoftI2C_Delay(SOFT_I2C_CLOCK_LOW_DELAY);
     }
 
-    SoftI2C_SetSda(bus, acknowledge ? 0 : 1);
+    SoftI2C_SetSda(bus, acknowledge ? 0 : 1); // 非末字节回ACK，末字节回NACK
     SoftI2C_Delay(SOFT_I2C_DATA_SETUP_DELAY);
     SoftI2C_SetScl(bus, 1);
     SoftI2C_Delay(SOFT_I2C_CLOCK_HIGH_DELAY);
@@ -219,6 +220,7 @@ static uint8 SoftI2C_ReadByte(SoftI2C_Bus_t bus, bit acknowledge)
  */
 void SoftI2C_Init(void)
 {
+    // 四路均释放为高电平，建立首次START前的总线空闲时间
     SoftI2C_SetSda(SOFT_I2C_BUS_1, 1); SoftI2C_SetScl(SOFT_I2C_BUS_1, 1);
     SoftI2C_SetSda(SOFT_I2C_BUS_2, 1); SoftI2C_SetScl(SOFT_I2C_BUS_2, 1);
     SoftI2C_SetSda(SOFT_I2C_BUS_3, 1); SoftI2C_SetScl(SOFT_I2C_BUS_3, 1);
@@ -236,6 +238,7 @@ void SoftI2C_Init(void)
  */
 bit SoftI2C_WriteRegister(SoftI2C_Bus_t bus, uint8 address, uint8 reg, uint8 value)
 {
+    // 总线编号非法时禁止操作任何GPIO
     if (!SoftI2C_IsValidBus(bus))
     {
         return 0;
@@ -294,6 +297,7 @@ bit SoftI2C_ReadRegisters(SoftI2C_Bus_t bus, uint8 address, uint8 reg,
         return 0;
     }
 
+    // 先用写方向设置目标寄存器地址
     SoftI2C_Start(bus);
     if (!SoftI2C_SendByte(bus, (uint8)(address << 1)))
     {
@@ -306,6 +310,7 @@ bit SoftI2C_ReadRegisters(SoftI2C_Bus_t bus, uint8 address, uint8 reg,
         return 0;
     }
 
+    // 重复START切换到读方向，保持同一总线事务
     SoftI2C_Start(bus);
     if (!SoftI2C_SendByte(bus, (uint8)((address << 1) | 0x01u)))
     {
@@ -313,6 +318,7 @@ bit SoftI2C_ReadRegisters(SoftI2C_Bus_t bus, uint8 address, uint8 reg,
         return 0;
     }
 
+    // 除最后一字节外均回ACK，最后一字节回NACK结束读取
     for (index = 0u; index < length; index++)
     {
         buffer[index] = SoftI2C_ReadByte(bus, index < (uint8)(length - 1u));

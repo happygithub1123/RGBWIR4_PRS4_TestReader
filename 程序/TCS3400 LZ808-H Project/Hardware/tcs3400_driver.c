@@ -52,7 +52,7 @@ static bit TCS3400_ReadUint16(SoftI2C_Bus_t bus, uint8 reg_low, uint16 *value)
         return 0;
     }
 
-    *value = (uint16)bytes[0] | ((uint16)bytes[1] << 8);
+    *value = (uint16)bytes[0] | ((uint16)bytes[1] << 8); // 低地址字节在前
     return 1;
 }
 
@@ -100,7 +100,8 @@ bit TCS3400_Init(SoftI2C_Bus_t bus, uint8 atime, uint8 gain)
     {
         return 0;
     }
-    if (!SoftI2C_WriteRegister(bus, TCS3400_I2C_ADDRESS, TCS3400_REG_ENABLE, 0x00u))
+    if (!SoftI2C_WriteRegister(bus, TCS3400_I2C_ADDRESS,
+                               TCS3400_REG_ENABLE, 0x00u))
     {
         return 0;
     }
@@ -113,6 +114,7 @@ bit TCS3400_Init(SoftI2C_Bus_t bus, uint8 atime, uint8 gain)
     {
         return 0;
     }
+    // 固件上电默认ATIME和增益必须真实写入，失败则整路初始化失败
     if (!TCS3400_SetATIME(bus, atime) || !TCS3400_SetGain(bus, gain))
     {
         return 0;
@@ -178,6 +180,7 @@ bit TCS3400_ReadID(SoftI2C_Bus_t bus, uint8 *id)
  */
 bit TCS3400_RestartIntegration(SoftI2C_Bus_t bus)
 {
+    // 先清AEN再重新置位，强制丢弃旧帧并开始一次新积分
     if (!SoftI2C_WriteRegister(bus, TCS3400_I2C_ADDRESS,
                                TCS3400_REG_ENABLE, TCS3400_ENABLE_PON))
     {
@@ -204,7 +207,7 @@ bit TCS3400_GetDataValid(SoftI2C_Bus_t bus, uint8 *valid)
         return 0;
     }
 
-    *valid = (status & TCS3400_STATUS_AVALID) ? 1u : 0u;
+    *valid = (status & TCS3400_STATUS_AVALID) ? 1u : 0u; // AVALID置位表示新帧完成
     return 1;
 }
 
@@ -220,6 +223,7 @@ bit TCS3400_ReadRGBC(SoftI2C_Bus_t bus, Tcs3400RgbcData_t *rgbc)
     {
         return 0;
     }
+    // 任一通道读取失败即判定整帧无效，禁止返回部分数据
     if (!TCS3400_ReadUint16(bus, TCS3400_REG_CLEAR_LOW, &rgbc->clear))
     {
         return 0;
@@ -257,6 +261,6 @@ bit TCS3400_SetIRMap(SoftI2C_Bus_t bus, bit enabled)
 {
     uint8 value;
 
-    value = enabled ? TCS3400_IR_MAP_BIT : 0x00u;
+    value = enabled ? TCS3400_IR_MAP_BIT : 0x00u; // 开启后Clear端口输出IR数据
     return TCS3400_WriteVerified(bus, TCS3400_REG_IR_MAP, value, 0xFFu);
 }

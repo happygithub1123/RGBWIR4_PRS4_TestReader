@@ -6,7 +6,11 @@
  内部定义
  *============================================================================*/
 
-sbit RS485_DIRECTION_PIN = P0 ^ 7;
+#define RS485_RECEIVE_LEVEL   0
+#define RS485_TRANSMIT_LEVEL  1
+
+/* SN65HVD72 /RE与DE并接且有外部上拉：低电平接收，高电平发送。 */
+sbit RS485_RE_DE_PIN = P0 ^ 7;
 
 /**
  * @brief  提供RS485方向切换保护时间
@@ -28,13 +32,13 @@ static void Rs485_TurnaroundDelay(void)
  *============================================================================*/
 
 /**
- * @brief  初始化RS485方向控制
+ * @brief  初始化RS485方向控制并进入接收模式
  * @param  无
  * @retval 无
  */
 void Rs485_Init(void)
 {
-    RS485_DIRECTION_PIN = 0;
+    RS485_RE_DE_PIN = RS485_RECEIVE_LEVEL; // 空闲时关闭驱动并开启接收
     Uart2_ClearRx();
 }
 
@@ -53,12 +57,12 @@ bit Rs485_SendBuffer(const uint8 *buffer, uint8 length)
         return 0;
     }
 
-    Uart2_ClearRx();
-    RS485_DIRECTION_PIN = 1;
-    Rs485_TurnaroundDelay();
+    Uart2_ClearRx(); // 丢弃发送前可能残留的旧响应
+    RS485_RE_DE_PIN = RS485_TRANSMIT_LEVEL; // 同时使能DE并关闭/RE
+    Rs485_TurnaroundDelay(); // 等待收发器方向稳定后再发送首字节
     result = Uart2_SendBuffer(buffer, length);
-    Rs485_TurnaroundDelay();
-    RS485_DIRECTION_PIN = 0;
+    Rs485_TurnaroundDelay(); // 末字节移出后保留总线释放时间
+    RS485_RE_DE_PIN = RS485_RECEIVE_LEVEL; // 无论发送结果如何都恢复接收
     return result;
 }
 

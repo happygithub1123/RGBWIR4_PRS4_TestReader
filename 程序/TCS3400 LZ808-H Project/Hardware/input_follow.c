@@ -24,6 +24,7 @@ sbit OUTPUT_4_PIN = P5 ^ 0;
  */
 void InputFollow_Init(void)
 {
+    // 上电先关闭四路输出，避免输入尚未稳定时产生误动作
     OUTPUT_1_PIN = 0;
     OUTPUT_2_PIN = 0;
     OUTPUT_3_PIN = 0;
@@ -37,6 +38,7 @@ void InputFollow_Init(void)
  */
 void InputFollow_Run(void)
 {
+    // 输入低有效，输出转换为对应高有效跟随信号
     OUTPUT_1_PIN = (INPUT_1_PIN == 0) ? 1 : 0;
     OUTPUT_2_PIN = (INPUT_2_PIN == 0) ? 1 : 0;
     OUTPUT_3_PIN = (INPUT_3_PIN == 0) ? 1 : 0;

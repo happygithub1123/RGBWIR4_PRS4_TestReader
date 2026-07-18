@@ -64,6 +64,7 @@ static bit Tcs3400Control_GetIntegrationConfig(uint16 parameter, uint8 *atime,
         return 0;
     }
 
+    // 只接受协议定义的五档；等待上限包含积分时间和通信余量
     switch (parameter)
     {
         case 3u:
@@ -99,6 +100,7 @@ static bit Tcs3400Control_GetGainRegister(uint16 parameter, uint8 *gain_register
         return 0;
     }
 
+    // 协议增益值映射到CONTROL寄存器低两位
     switch (parameter)
     {
         case 1u:  *gain_register = 0x00u; return 1;
@@ -106,41 +108,6 @@ static bit Tcs3400Control_GetGainRegister(uint16 parameter, uint8 *gain_register
         case 16u: *gain_register = 0x02u; return 1;
         case 64u: *gain_register = 0x03u; return 1;
         default: return 0;
-    }
-}
-
-/**
- * @brief  将ATIME寄存器转换为典型积分时间
- * @param  atime ATIME寄存器值
- * @retval 典型积分时间，单位ms
- */
-static float Tcs3400Control_ATIMEToMs(uint8 atime)
-{
-    switch (atime)
-    {
-        case 0xFFu: return 2.78f;
-        case 0xF6u: return 27.8f;
-        case 0xDBu: return 103.0f;
-        case 0xC0u: return 178.0f;
-        case 0x00u: return 712.0f;
-        default: return 0.0f;
-    }
-}
-
-/**
- * @brief  将增益寄存器转换为倍率
- * @param  gain_register 增益寄存器值
- * @retval 实际增益倍率
- */
-static float Tcs3400Control_GainToValue(uint8 gain_register)
-{
-    switch (gain_register)
-    {
-        case 0x00u: return 1.0f;
-        case 0x01u: return 4.0f;
-        case 0x02u: return 16.0f;
-        case 0x03u: return 64.0f;
-        default: return 0.0f;
     }
 }
 
@@ -156,9 +123,9 @@ static void Tcs3400Control_Finish(ProjectAsyncResult_t result, float value)
     {
         g_tcs_sensor[g_tcs_task_sensor].operation_state = TCS_TASK_IDLE;
     }
-    g_tcs_task_state = TCS_TASK_IDLE;
+    g_tcs_task_state = TCS_TASK_IDLE; // 停止采样状态机
     g_tcs_result_value = value;
-    g_tcs_result_state = result;
+    g_tcs_result_state = result;      // 保留结果等待上层消费
 }
 
 /**
@@ -171,9 +138,10 @@ static void Tcs3400Control_Fail(uint8 sensor_index)
     SoftI2C_Bus_t bus;
 
     bus = Tcs3400Control_GetBus(sensor_index);
-    g_tcs_sensor[sensor_index].communication_ok = 0u;
-    g_tcs_sensor[sensor_index].data_valid = 0u;
+    g_tcs_sensor[sensor_index].communication_ok = 0u; // 标记真实硬件通信异常
+    g_tcs_sensor[sensor_index].data_valid = 0u;       // 禁止复用旧采样状态
 
+    // IR流程失败时尽力关闭映射，避免后续Clear通道保持IR数据
     if (g_tcs_sensor[sensor_index].ir_map_enabled)
     {
         if (TCS3400_SetIRMap(bus, 0))
@@ -197,6 +165,7 @@ static bit Tcs3400Control_StartRgbc(uint8 sensor_index, uint8 channel)
     SoftI2C_Bus_t bus;
 
     bus = Tcs3400Control_GetBus(sensor_index);
+    // 普通通道先关闭IR映射，再强制启动一帧新积分
     if (!TCS3400_SetIRMap(bus, 0) || !TCS3400_RestartIntegration(bus))
     {
         Tcs3400Control_Fail(sensor_index);
@@ -208,7 +177,7 @@ static bit Tcs3400Control_StartRgbc(uint8 sensor_index, uint8 channel)
     g_tcs_sensor[sensor_index].operation_state = TCS_TASK_WAIT_RGBC;
     g_tcs_task_sensor = sensor_index;
     g_tcs_task_channel = channel;
-    g_tcs_task_start_ms = Timer0_GetMs();
+    g_tcs_task_start_ms = Timer0_GetMs(); // 同时作为积分等待和超时基准
     g_tcs_last_poll_ms = g_tcs_task_start_ms;
     g_tcs_task_state = TCS_TASK_WAIT_RGBC;
     return 1;
@@ -224,6 +193,7 @@ static bit Tcs3400Control_StartIr(uint8 sensor_index)
     SoftI2C_Bus_t bus;
 
     bus = Tcs3400Control_GetBus(sensor_index);
+    // IR数据映射到Clear端口，必须重新积分后才能读取
     if (!TCS3400_SetIRMap(bus, 1))
     {
         Tcs3400Control_Fail(sensor_index);
@@ -241,9 +211,49 @@ static bit Tcs3400Control_StartIr(uint8 sensor_index)
     g_tcs_sensor[sensor_index].operation_state = TCS_TASK_WAIT_IR;
     g_tcs_task_sensor = sensor_index;
     g_tcs_task_channel = 5u;
-    g_tcs_task_start_ms = Timer0_GetMs();
+    g_tcs_task_start_ms = Timer0_GetMs(); // 同时作为积分等待和超时基准
     g_tcs_last_poll_ms = g_tcs_task_start_ms;
     g_tcs_task_state = TCS_TASK_WAIT_IR;
+    return 1;
+}
+
+/**
+ * @brief  确保指定传感器已经完成真实硬件初始化
+ * @param  sensor_index 传感器数组下标
+ * @retval 1：传感器可用；0：初始化或通信失败
+ */
+static bit Tcs3400Control_EnsureInitialized(uint8 sensor_index)
+{
+    TcsSensorState_t *sensor_state;
+
+    if (sensor_index >= TCS3400_SENSOR_COUNT)
+    {
+        return 0;
+    }
+
+    sensor_state = &g_tcs_sensor[sensor_index];
+    if (sensor_state->initialized && sensor_state->communication_ok)
+    {
+        return 1;
+    }
+
+    // 断线重接后按该路缓存配置重新初始化，初次上电缓存即为178ms和16x
+    if (!TCS3400_Init(Tcs3400Control_GetBus(sensor_index),
+                      sensor_state->atime,
+                      sensor_state->gain_register))
+    {
+        sensor_state->initialized = 0u;
+        sensor_state->communication_ok = 0u;
+        sensor_state->data_valid = 0u;
+        sensor_state->ir_map_enabled = 0u;
+        return 0;
+    }
+
+    sensor_state->initialized = 1u;
+    sensor_state->communication_ok = 1u;
+    sensor_state->data_valid = 0u;
+    sensor_state->ir_map_enabled = 0u;
+    sensor_state->operation_state = TCS_TASK_IDLE;
     return 1;
 }
 
@@ -265,6 +275,7 @@ void Tcs3400Control_Init(void)
     g_tcs_result_state = PROJECT_ASYNC_RESULT_NONE;
     g_tcs_task_sensor = TCS3400_SENSOR_COUNT;
 
+    // 四路先装载固件默认缓存，再逐路写入真实寄存器并检查I2C应答
     for (index = 0u; index < TCS3400_SENSOR_COUNT; index++)
     {
         g_tcs_sensor[index].atime = TCS3400_DEFAULT_ATIME_REGISTER;
@@ -277,13 +288,8 @@ void Tcs3400Control_Init(void)
         g_tcs_sensor[index].ir_map_enabled = 0u;
         g_tcs_sensor[index].operation_state = TCS_TASK_IDLE;
 
-        if (TCS3400_Init(Tcs3400Control_GetBus(index),
-                         TCS3400_DEFAULT_ATIME_REGISTER,
-                         TCS3400_DEFAULT_GAIN_REGISTER))
-        {
-            g_tcs_sensor[index].initialized = 1u;
-            g_tcs_sensor[index].communication_ok = 1u;
-        }
+        // 初始化失败时保留异常状态，后续收到该路命令时再自动重试
+        Tcs3400Control_EnsureInitialized(index);
     }
 }
 
@@ -303,6 +309,7 @@ bit Tcs3400Control_Start(uint8 sensor, uint8 operation, uint16 parameter)
     uint16 wait_ms;
     float actual_value;
 
+    // 校验设备范围并保护正在运行或尚未消费的结果
     if ((sensor < 1u) || (sensor > TCS3400_SENSOR_COUNT) ||
         (g_tcs_task_state != TCS_TASK_IDLE) ||
         (g_tcs_result_state != PROJECT_ASYNC_RESULT_NONE))
@@ -312,12 +319,8 @@ bit Tcs3400Control_Start(uint8 sensor, uint8 operation, uint16 parameter)
 
     sensor_index = (uint8)(sensor - 1u);
     g_tcs_task_sensor = sensor_index;
-    if (!g_tcs_sensor[sensor_index].initialized)
-    {
-        Tcs3400Control_Finish(PROJECT_ASYNC_RESULT_ERROR, 0.0f);
-        return 1;
-    }
 
+    // x0设置五档积分时间，写入成功后才更新该路缓存
     if (operation == 0u)
     {
         if (!Tcs3400Control_GetIntegrationConfig(parameter, &register_value,
@@ -325,8 +328,14 @@ bit Tcs3400Control_Start(uint8 sensor, uint8 operation, uint16 parameter)
         {
             return 0;
         }
+        if (!Tcs3400Control_EnsureInitialized(sensor_index))
+        {
+            Tcs3400Control_Finish(PROJECT_ASYNC_RESULT_ERROR, 0.0f);
+            return 1;
+        }
         if (!TCS3400_SetATIME(Tcs3400Control_GetBus(sensor_index), register_value))
         {
+            // 新值写入失败时回写旧值；回滚失败则保持通信异常
             rollback_ok = TCS3400_SetATIME(
                 Tcs3400Control_GetBus(sensor_index),
                 g_tcs_sensor[sensor_index].atime);
@@ -343,11 +352,17 @@ bit Tcs3400Control_Start(uint8 sensor, uint8 operation, uint16 parameter)
         return 1;
     }
 
+    // x1至x5只读取当前配置下的新数据，EFG必须固定为000
     if ((operation >= 1u) && (operation <= 5u))
     {
         if (parameter != 0u)
         {
             return 0;
+        }
+        if (!Tcs3400Control_EnsureInitialized(sensor_index))
+        {
+            Tcs3400Control_Finish(PROJECT_ASYNC_RESULT_ERROR, 0.0f);
+            return 1;
         }
         if (operation == 5u)
         {
@@ -356,14 +371,21 @@ bit Tcs3400Control_Start(uint8 sensor, uint8 operation, uint16 parameter)
         return Tcs3400Control_StartRgbc(sensor_index, operation);
     }
 
+    // x6设置四档增益，写入成功后才更新该路缓存
     if (operation == 6u)
     {
         if (!Tcs3400Control_GetGainRegister(parameter, &register_value))
         {
             return 0;
         }
+        if (!Tcs3400Control_EnsureInitialized(sensor_index))
+        {
+            Tcs3400Control_Finish(PROJECT_ASYNC_RESULT_ERROR, 0.0f);
+            return 1;
+        }
         if (!TCS3400_SetGain(Tcs3400Control_GetBus(sensor_index), register_value))
         {
+            // 新值写入失败时回写旧值；回滚失败则保持通信异常
             rollback_ok = TCS3400_SetGain(
                 Tcs3400Control_GetBus(sensor_index),
                 g_tcs_sensor[sensor_index].gain_register);
@@ -378,30 +400,23 @@ bit Tcs3400Control_Start(uint8 sensor, uint8 operation, uint16 parameter)
         return 1;
     }
 
-    if ((operation >= 7u) && (operation <= 9u) && (parameter != 0u))
+    // x7和x8为保留操作，任何参数都不访问底层硬件
+    if ((operation == 7u) || (operation == 8u))
     {
         return 0;
     }
-    if (((operation == 7u) || (operation == 8u)) &&
-        !g_tcs_sensor[sensor_index].communication_ok)
+    if ((operation == 9u) && (parameter != 0u))
     {
-        Tcs3400Control_Finish(PROJECT_ASYNC_RESULT_ERROR, 0.0f);
-        return 1;
+        return 0;
     }
-    if (operation == 7u)
-    {
-        actual_value = Tcs3400Control_ATIMEToMs(g_tcs_sensor[sensor_index].atime);
-        Tcs3400Control_Finish(PROJECT_ASYNC_RESULT_SUCCESS, actual_value);
-        return 1;
-    }
-    if (operation == 8u)
-    {
-        actual_value = Tcs3400Control_GainToValue(g_tcs_sensor[sensor_index].gain_register);
-        Tcs3400Control_Finish(PROJECT_ASYNC_RESULT_SUCCESS, actual_value);
-        return 1;
-    }
+    // x9只允许EFG=000，并直接返回真实ID寄存器值
     if (operation == 9u)
     {
+        if (!Tcs3400Control_EnsureInitialized(sensor_index))
+        {
+            Tcs3400Control_Finish(PROJECT_ASYNC_RESULT_ERROR, 0.0f);
+            return 1;
+        }
         if (!TCS3400_ReadID(Tcs3400Control_GetBus(sensor_index), &id))
         {
             Tcs3400Control_Fail(sensor_index);
@@ -434,6 +449,7 @@ void Tcs3400Control_Poll(void)
     }
 
     sensor_state = &g_tcs_sensor[g_tcs_task_sensor];
+    // 先等待最短积分时间，再按轮询间隔检查AVALID并限制总等待时间
     if (!Timer0_HasElapsed(g_tcs_task_start_ms, sensor_state->integration_parameter))
     {
         return;
@@ -455,12 +471,13 @@ void Tcs3400Control_Poll(void)
         Tcs3400Control_Fail(g_tcs_task_sensor);
         return;
     }
-    sensor_state->data_valid = valid;
+    sensor_state->data_valid = valid; // 记录本次从状态寄存器读取的真实结果
     if (!valid)
     {
         return;
     }
 
+    // RGBC在同一有效帧中读取，再按命令选择一个通道返回
     if (g_tcs_task_state == TCS_TASK_WAIT_RGBC)
     {
         if (!TCS3400_ReadRGBC(bus, &rgbc))
@@ -482,6 +499,7 @@ void Tcs3400Control_Poll(void)
         return;
     }
 
+    // 保存映射后的IR值，再关闭映射并启动Clear恢复积分
     if (g_tcs_task_state == TCS_TASK_WAIT_IR)
     {
         if (!TCS3400_ReadClearPort(bus, &g_tcs_saved_ir) ||
@@ -506,6 +524,7 @@ void Tcs3400Control_Poll(void)
         return;
     }
 
+    // Clear恢复帧有效后才返回已保存IR，确保下一条Clear读取不受映射影响
     sensor_state->communication_ok = 1u;
     Tcs3400Control_Finish(PROJECT_ASYNC_RESULT_SUCCESS, (float)g_tcs_saved_ir);
 }
@@ -534,7 +553,7 @@ ProjectAsyncResult_t Tcs3400Control_TakeResult(float *value)
         result = PROJECT_ASYNC_RESULT_ERROR;
     }
 
-    g_tcs_result_state = PROJECT_ASYNC_RESULT_NONE;
+    g_tcs_result_state = PROJECT_ASYNC_RESULT_NONE; // 结果只允许消费一次
     g_tcs_task_sensor = TCS3400_SENSOR_COUNT;
     return result;
 }

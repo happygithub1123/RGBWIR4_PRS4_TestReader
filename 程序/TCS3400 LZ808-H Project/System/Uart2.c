@@ -24,6 +24,7 @@ static bit Uart2_WaitTxComplete(void)
     uint16 timeout;
 
     timeout = UART2_TX_TIMEOUT;
+    // 有限等待防止发送中断异常时永久阻塞主循环
     while (g_uart2_tx_busy)
     {
         if (--timeout == 0u)
@@ -48,14 +49,14 @@ static bit Uart2_WaitTxComplete(void)
 void Uart2_Init(void)
 {
     P_SW2 &= (uint8)(~UART2_S2);
-    P_SW2 |= UART2_S1;
+    P_SW2 |= UART2_S1; // UART2切换到P1.0 RXD2和P1.1 TXD2
 
-    S2CON = S2SM1 | S2REN;
-    AUXR &= (uint8)(~T2R);
-    AUXR |= T2x12;
-    T2H = 0xFFu;
-    T2L = 0xD0u;
-    AUXR |= T2R;
+    S2CON = S2SM1 | S2REN; // UART2模式1，8N1并允许接收
+    AUXR &= (uint8)(~T2R); // 配置重装值前停止Timer2
+    AUXR |= T2x12;         // Timer2使用1T模式
+    T2H = 0xFFu;           // 22.1184 MHz下115200 bps重装高字节
+    T2L = 0xD0u;           // 22.1184 MHz下115200 bps重装低字节
+    AUXR |= T2R;           // 启动UART2波特率发生器
 
     g_uart2_write_index = 0u;
     g_uart2_read_index = 0u;
@@ -92,7 +93,7 @@ void Uart2_ClearRx(void)
     uint8 interrupt_state;
 
     interrupt_state = IE2 & ES2;
-    IE2 &= (uint8)(~ES2);
+    IE2 &= (uint8)(~ES2); // 临界区防止中断同时修改环形缓冲索引
     g_uart2_write_index = 0u;
     g_uart2_read_index = 0u;
     g_uart2_rx_overflow = 0;
@@ -110,7 +111,7 @@ bit Uart2_TakeRxOverflow(void)
     bit overflow;
 
     interrupt_state = IE2 & ES2;
-    IE2 &= (uint8)(~ES2);
+    IE2 &= (uint8)(~ES2); // 原子读取并清除中断更新的溢出标志
     overflow = g_uart2_rx_overflow;
     g_uart2_rx_overflow = 0;
     IE2 |= interrupt_state;
@@ -129,7 +130,7 @@ bit Uart2_SendByte(uint8 dat)
         return 0;
     }
 
-    g_uart2_tx_busy = 1;
+    g_uart2_tx_busy = 1; // S2TI中断在硬件发送完成后清除此标志
     S2BUF = dat;
     return 1;
 }
@@ -149,6 +150,7 @@ bit Uart2_SendBuffer(const uint8 *buffer, uint8 length)
         return 0;
     }
 
+    // 逐字节等待前一字节完成，保证整帧发送顺序
     for (index = 0u; index < length; index++)
     {
         if (!Uart2_SendByte(buffer[index]))
@@ -174,8 +176,9 @@ void Uart2_Isr(void) interrupt 8
     {
         S2CON &= (uint8)(~S2RI);
         dat = S2BUF;
-        next_index = (uint8)((g_uart2_write_index + 1u) & UART2_RX_BUFFER_MASK);
+        next_index = (uint8)((g_uart2_write_index + 1u) & UART2_RX_BUFFER_MASK); // 32字节环形回绕
 
+        // 保留一个空槽区分空与满，实际最多缓存31字节
         if (next_index != g_uart2_read_index)
         {
             g_uart2_rx_buffer[g_uart2_write_index] = dat;

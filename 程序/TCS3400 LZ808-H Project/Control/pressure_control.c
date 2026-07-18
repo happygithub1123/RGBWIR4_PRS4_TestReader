@@ -27,8 +27,8 @@ static float g_pressure_result_value;
  */
 static void PressureControl_Finish(ProjectAsyncResult_t result, float value)
 {
-    g_pressure_task_state = PRESSURE_TASK_IDLE;
-    g_pressure_result_state = result;
+    g_pressure_task_state = PRESSURE_TASK_IDLE; // 停止后续状态轮询
+    g_pressure_result_state = result;           // 保留结果等待上层消费
     g_pressure_result_value = value;
 }
 
@@ -46,6 +46,7 @@ static bit PressureControl_Scale(int16 raw_value, int16 decimal_places, float *v
         return 0;
     }
 
+    // 仪表仅定义0至4位小数，超出范围视为响应内容错误
     switch (decimal_places)
     {
         case 0: *value = (float)raw_value; return 1;
@@ -69,8 +70,8 @@ static bit PressureControl_Scale(int16 raw_value, int16 decimal_places, float *v
 void PressureControl_Init(void)
 {
     PressureMeter_Init();
-    g_pressure_task_state = PRESSURE_TASK_IDLE;
-    g_pressure_result_state = PROJECT_ASYNC_RESULT_NONE;
+    g_pressure_task_state = PRESSURE_TASK_IDLE;              // 当前无事务
+    g_pressure_result_state = PROJECT_ASYNC_RESULT_NONE;      // 当前无待取结果
     g_pressure_slave = 0u;
     g_pressure_raw_value = 0;
     g_pressure_result_value = 0.0f;
@@ -83,6 +84,7 @@ void PressureControl_Init(void)
  */
 bit PressureControl_StartRead(uint8 slave)
 {
+    // 地址越界或旧结果未消费时不访问RS485总线
     if ((slave < MODBUS_SLAVE_ADDRESS_MIN) ||
         (slave > MODBUS_SLAVE_ADDRESS_MAX) || PressureControl_IsBusy())
     {
@@ -94,7 +96,7 @@ bit PressureControl_StartRead(uint8 slave)
     }
 
     g_pressure_slave = slave;
-    g_pressure_task_state = PRESSURE_TASK_WAIT_VALUE;
+    g_pressure_task_state = PRESSURE_TASK_WAIT_VALUE; // 第一步读取原始压力
     return 1;
 }
 
@@ -105,6 +107,7 @@ bit PressureControl_StartRead(uint8 slave)
  */
 bit PressureControl_StartZero(uint8 slave)
 {
+    // 地址越界或旧结果未消费时不访问RS485总线
     if ((slave < MODBUS_SLAVE_ADDRESS_MIN) ||
         (slave > MODBUS_SLAVE_ADDRESS_MAX) || PressureControl_IsBusy())
     {
@@ -116,7 +119,7 @@ bit PressureControl_StartZero(uint8 slave)
     }
 
     g_pressure_slave = slave;
-    g_pressure_task_state = PRESSURE_TASK_WAIT_ZERO;
+    g_pressure_task_state = PRESSURE_TASK_WAIT_ZERO; // 等待写线圈回显
     return 1;
 }
 
@@ -148,6 +151,7 @@ void PressureControl_Poll(void)
         return;
     }
 
+    // 压力值和小数位分两帧读取，避免阻塞主循环等待连续事务
     if (g_pressure_task_state == PRESSURE_TASK_WAIT_VALUE)
     {
         g_pressure_raw_value = meter_value;
@@ -157,7 +161,7 @@ void PressureControl_Poll(void)
             return;
         }
 
-        g_pressure_task_state = PRESSURE_TASK_WAIT_DECIMAL;
+        g_pressure_task_state = PRESSURE_TASK_WAIT_DECIMAL; // 下一帧读取缩放位数
         return;
     }
 
@@ -173,6 +177,7 @@ void PressureControl_Poll(void)
         return;
     }
 
+    // 剩余运行态只可能是清零等待，成功响应统一返回0.0f
     PressureControl_Finish(PROJECT_ASYNC_RESULT_SUCCESS, 0.0f);
 }
 
@@ -200,7 +205,7 @@ ProjectAsyncResult_t PressureControl_TakeResult(float *value)
         result = PROJECT_ASYNC_RESULT_ERROR;
     }
 
-    g_pressure_result_state = PROJECT_ASYNC_RESULT_NONE;
+    g_pressure_result_state = PROJECT_ASYNC_RESULT_NONE; // 结果只允许消费一次
     return result;
 }
 

@@ -42,11 +42,13 @@ bit SensorControl_Start(uint8 command, uint16 parameter)
     uint8 sensor;
     uint8 operation;
 
+    // 任一子控制器占用期间都拒绝覆盖当前命令来源
     if (SensorControl_IsBusy())
     {
         return 0;
     }
 
+    // 10至49按十位选择TCS3400，个位选择具体操作
     if ((command >= 10u) && (command <= 49u))
     {
         sensor = command / 10u;
@@ -60,6 +62,7 @@ bit SensorControl_Start(uint8 command, uint16 parameter)
         return 1;
     }
 
+    // 压力命令的EFG直接作为实际Modbus从机地址
     if ((command == MTF_COMMAND_PRESSURE_READ) &&
         (parameter >= MODBUS_SLAVE_ADDRESS_MIN) &&
         (parameter <= MODBUS_SLAVE_ADDRESS_MAX))
@@ -113,6 +116,7 @@ ProjectAsyncResult_t SensorControl_TakeResult(float *value)
 {
     ProjectAsyncResult_t result;
 
+    // 只向启动该命令的子控制器取结果，避免跨设备串响应
     if (g_sensor_source == SENSOR_SOURCE_TCS3400)
     {
         result = Tcs3400Control_TakeResult(value);
@@ -128,7 +132,7 @@ ProjectAsyncResult_t SensorControl_TakeResult(float *value)
 
     if (result != PROJECT_ASYNC_RESULT_NONE)
     {
-        g_sensor_source = SENSOR_SOURCE_NONE;
+        g_sensor_source = SENSOR_SOURCE_NONE; // 结果消费后恢复统一空闲态
     }
     return result;
 }

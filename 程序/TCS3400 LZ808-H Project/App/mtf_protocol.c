@@ -34,12 +34,14 @@ static bit MtfProtocol_IsDigit(uint8 dat)
  */
 bit MtfProtocol_ParseFrame(const uint8 *buffer, uint8 length, MtfRequest_t *request)
 {
+    // 固定15字节协议，空指针或长度错误时禁止继续索引缓冲区
     if ((buffer == 0) || (request == 0) ||
         (length != MTF_REQUEST_FRAME_LENGTH))
     {
         return 0;
     }
 
+    // 校验固定帧头、分隔符和真实回车换行位置
     if ((buffer[0] != 'M') || (buffer[1] != 'T') ||
         (buffer[2] != 'F') || (buffer[3] != ':') ||
         (buffer[6] != '-') || (buffer[9] != '-') ||
@@ -48,6 +50,7 @@ bit MtfProtocol_ParseFrame(const uint8 *buffer, uint8 length, MtfRequest_t *requ
         return 0;
     }
 
+    // AB、CD、EFG必须全为数字，CD只校验格式而不保存
     if (!MtfProtocol_IsDigit(buffer[MTF_FRAME_COMMAND_TENS_INDEX]) ||
         !MtfProtocol_IsDigit(buffer[MTF_FRAME_COMMAND_ONES_INDEX]) ||
         !MtfProtocol_IsDigit(buffer[MTF_FRAME_PLACEHOLDER_1_INDEX]) ||
@@ -85,7 +88,8 @@ void MtfProtocol_BuildFloatFrame(float value, uint8 *frame)
     }
 
     float_bytes.value = value;
-    frame[0] = '=';
+    frame[0] = '=';                    // 固定响应帧头
+    // Keil C51内存字节逆序写入，形成协议要求的小端Float载荷
     frame[1] = float_bytes.bytes[3];
     frame[2] = float_bytes.bytes[2];
     frame[3] = float_bytes.bytes[1];
@@ -95,7 +99,7 @@ void MtfProtocol_BuildFloatFrame(float value, uint8 *frame)
 }
 
 /**
- * @brief  发送正常Float响应帧
+ * @brief  发送Float响应帧
  * @param  value 返回数值
  * @retval 1：发送成功；0：UART1发送超时
  */
@@ -114,14 +118,5 @@ bit MtfProtocol_SendValue(float value)
  */
 bit MtfProtocol_SendError(void)
 {
-    uint8 frame[MTF_RESPONSE_FRAME_LENGTH];
-
-    frame[0] = '=';
-    frame[1] = 0xFFu;
-    frame[2] = 0xFFu;
-    frame[3] = 0xFFu;
-    frame[4] = 0xFFu;
-    frame[5] = '\r';
-    frame[6] = '\n';
-    return Uart1_SendBuffer(frame, MTF_RESPONSE_FRAME_LENGTH);
+    return MtfProtocol_SendValue(-1.0f); // 主板统一按Float负一识别异常
 }

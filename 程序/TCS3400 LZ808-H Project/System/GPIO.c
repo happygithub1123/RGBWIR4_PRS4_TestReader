@@ -11,17 +11,18 @@
  */
 void GPIO_Init(void)
 {
-    P0M0 = 0x80u; P0M1 = 0x00u;
-    P1M0 = 0x02u; P1M1 = 0x00u;
+    P0 &= 0x7Fu;             // 先压低外部上拉的P0.7，使RS485进入接收
+    P0M0 = 0x80u; P0M1 = 0x00u; // P0.7推挽输出，其余P0口准双向
+    P1M0 = 0x02u; P1M1 = 0x00u; // UART2 TXD2使用P1.1推挽输出
     P2M0 = 0x00u; P2M1 = 0x00u;
-    P3M0 = 0x1Eu; P3M1 = 0x00u;
+    P3M0 = 0x1Eu; P3M1 = 0x00u; // TXD1及三路跟随输出使用推挽模式
     P4M0 = 0x00u; P4M1 = 0x00u;
-    P5M0 = 0x11u; P5M1 = 0x00u;
+    P5M0 = 0x11u; P5M1 = 0x00u; // P5.0跟随输出和P5.4指示灯使用推挽模式
 
-    P_SW2 |= 0x80u;
-    P0PU |= 0x16u;
-    P2PU |= 0x60u;
-    P4PU |= 0x60u;
-    P5PU |= 0x04u;
-    P_SW2 &= 0x7Fu;
+    P_SW2 |= 0x80u;  // 开放扩展SFR写访问
+    P0PU |= 0x16u;   // P0.1、P0.2、P0.4启用内部上拉
+    P2PU |= 0x60u;   // P2.5、P2.6启用内部上拉
+    P4PU |= 0x60u;   // P4.5、P4.6启用内部上拉
+    P5PU |= 0x04u;   // P5.2启用内部上拉
+    P_SW2 &= 0x7Fu;  // 关闭扩展SFR写访问
 }

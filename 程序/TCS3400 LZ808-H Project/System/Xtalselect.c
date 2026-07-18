@@ -19,10 +19,11 @@ bit XtalSelect_Init(void)
 {
     uint16 timeout;
 
-    P_SW2 |= 0x80u;
-    XOSCCR = 0xC0u;
+    P_SW2 |= 0x80u;       // 开放扩展SFR写访问
+    XOSCCR = 0xC0u;       // 启动外部晶振并等待稳定标志
     timeout = XTAL_STABLE_TIMEOUT;
 
+    // 有限计数防止晶振故障时永久阻塞启动流程
     while (((XOSCCR & 0x01u) == 0u) && (timeout > 0u))
     {
         timeout--;
@@ -34,8 +35,8 @@ bit XtalSelect_Init(void)
         return 0;
     }
 
-    CLKDIV = 0x00u;
-    CLKSEL = 0x01u;
-    P_SW2 &= 0x7Fu;
+    CLKDIV = 0x00u;       // 系统时钟不分频
+    CLKSEL = 0x01u;       // 系统时钟切换到外部晶振
+    P_SW2 &= 0x7Fu;       // 关闭扩展SFR写访问
     return 1;
 }

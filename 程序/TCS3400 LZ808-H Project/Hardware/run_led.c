@@ -30,6 +30,7 @@ void RunLed_Init(void)
  */
 void RunLed_Poll(void)
 {
+    // 使用时间差判断周期，允许32位毫秒计数自然回绕
     if (Timer0_HasElapsed(g_run_led_last_ms, 1000u))
     {
         g_run_led_last_ms = Timer0_GetMs();

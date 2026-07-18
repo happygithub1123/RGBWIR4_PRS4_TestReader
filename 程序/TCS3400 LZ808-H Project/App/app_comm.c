@@ -20,8 +20,8 @@ static uint32 g_app_rx_start_ms;
  */
 static void AppComm_ResetReceiver(void)
 {
-    g_app_rx_index = 0u;
-    g_app_rx_start_ms = 0UL;
+    g_app_rx_index = 0u;       // 丢弃当前未完成帧
+    g_app_rx_start_ms = 0UL;   // 取消本帧接收超时计时
 }
 
 /**
@@ -33,23 +33,26 @@ static void AppComm_ProcessFrame(const uint8 *buffer)
 {
     MtfRequest_t request;
 
+    // 格式错误时不进入业务层，也不访问任何传感器
     if (!MtfProtocol_ParseFrame(buffer, MTF_REQUEST_FRAME_LENGTH, &request))
     {
         MtfProtocol_SendError();
         return;
     }
+    // 严格一问一答，上一请求未完成时拒绝新请求
     if (g_app_request_pending || SensorControl_IsBusy())
     {
         MtfProtocol_SendError();
         return;
     }
+    // 业务层负责校验AB命令和EFG取值范围
     if (!SensorControl_Start(request.command, request.parameter))
     {
         MtfProtocol_SendError();
         return;
     }
 
-    g_app_request_pending = 1;
+    g_app_request_pending = 1; // 等待异步操作产生唯一响应
 }
 
 /**
@@ -61,6 +64,7 @@ static void AppComm_HandleByte(uint8 dat)
 {
     if (g_app_rx_index == 0u)
     {
+        // 空闲时只接受帧头M，用于从连续字节流重新同步
         if (dat != 'M')
         {
             return;
@@ -68,11 +72,12 @@ static void AppComm_HandleByte(uint8 dat)
 
         g_app_rx_buffer[0] = dat;
         g_app_rx_index = 1u;
-        g_app_rx_start_ms = Timer0_GetMs();
+        g_app_rx_start_ms = Timer0_GetMs(); // 从首字节开始计算整帧超时
         return;
     }
 
     g_app_rx_buffer[g_app_rx_index++] = dat;
+    // 提前收到换行表示帧长错误，立即清帧并返回异常
     if ((dat == '\n') && (g_app_rx_index != MTF_REQUEST_FRAME_LENGTH))
     {
         AppComm_ResetReceiver();
@@ -80,6 +85,7 @@ static void AppComm_HandleByte(uint8 dat)
         return;
     }
 
+    // 固定收满15字节后一次性校验，接收阶段不解析字段
     if (g_app_rx_index == MTF_REQUEST_FRAME_LENGTH)
     {
         AppComm_ProcessFrame(g_app_rx_buffer);
@@ -103,7 +109,7 @@ static void AppComm_PollResult(void)
         return;
     }
 
-    result = SensorControl_TakeResult(&value);
+    result = SensorControl_TakeResult(&value); // 结果只允许消费一次
     if (result == PROJECT_ASYNC_RESULT_SUCCESS)
     {
         MtfProtocol_SendValue(value);
@@ -128,7 +134,7 @@ static void AppComm_PollResult(void)
 void AppComm_Init(void)
 {
     AppComm_ResetReceiver();
-    g_app_request_pending = 0;
+    g_app_request_pending = 0; // 上电时没有待回复请求
     Uart1_ClearRx();
 }
 
@@ -142,6 +148,7 @@ void AppComm_Poll(void)
     uint8 dat;
 
     AppComm_PollResult();
+    // 不完整帧超时后清除接收状态，避免后续字节拼入旧帧
     if ((g_app_rx_index > 0u) &&
         Timer0_HasElapsed(g_app_rx_start_ms, MTF_RECEIVE_TIMEOUT_MS))
     {
@@ -149,6 +156,7 @@ void AppComm_Poll(void)
         MtfProtocol_SendError();
     }
 
+    // 环形缓冲溢出后帧边界已不可信，必须整体丢弃
     if (Uart1_TakeRxOverflow())
     {
         Uart1_ClearRx();
@@ -157,6 +165,7 @@ void AppComm_Poll(void)
         return;
     }
 
+    // 单次轮询排空当前缓存，不在中断内执行协议解析
     while (Uart1_ReadByte(&dat))
     {
         AppComm_HandleByte(dat);

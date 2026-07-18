@@ -13,7 +13,7 @@ void main(void)
 {
     bit system_ready;
 
-    EA = 0;
+    EA = 0; // 所有中断源配置完成前保持总中断关闭
     system_ready = Sys_Init();
     InputFollow_Init();
     RunLed_Init();
@@ -25,6 +25,7 @@ void main(void)
     }
 
     EA = 1;
+    // 主循环只执行短任务轮询，长等待由毫秒时基和状态机拆分
     while (1)
     {
         InputFollow_Run();

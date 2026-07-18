@@ -44,21 +44,22 @@ static bit ModbusRtu_StartRequest(uint8 *request, uint8 slave, uint8 function)
     }
 
     crc = ModbusRtu_CalcCrc(request, 6u);
-    request[6] = (uint8)(crc & 0xFFu);
+    request[6] = (uint8)(crc & 0xFFu); // Modbus CRC低字节先发送
     request[7] = (uint8)(crc >> 8);
 
+    // 保存本次请求身份，后续响应必须同时匹配地址和功能码
     g_modbus_expected_slave = slave;
     g_modbus_expected_function = function;
     g_modbus_expected_length = 0u;
     g_modbus_response_length = 0u;
-    Rs485_ClearRx();
+    Rs485_ClearRx(); // 发送前丢弃上一事务残留字节
 
     if (!Rs485_SendBuffer(request, MODBUS_REQUEST_LENGTH))
     {
         return 0;
     }
 
-    g_modbus_start_ms = Timer0_GetMs();
+    g_modbus_start_ms = Timer0_GetMs(); // 从请求发送完成后开始计算响应超时
     g_modbus_state = MODBUS_STATE_WAITING;
     return 1;
 }
@@ -73,11 +74,13 @@ static void ModbusRtu_ValidateResponse(void)
     uint16 received_crc;
     uint16 calculated_crc;
 
+    // 响应末尾CRC同样按低字节在前还原
     received_crc = (uint16)g_modbus_response[g_modbus_response_length - 2u] |
                    ((uint16)g_modbus_response[g_modbus_response_length - 1u] << 8);
     calculated_crc = ModbusRtu_CalcCrc(g_modbus_response,
                                        (uint8)(g_modbus_response_length - 2u));
 
+    // CRC、从机地址或功能码任一不符都禁止向业务层交付数据
     if ((received_crc != calculated_crc) ||
         (g_modbus_response[0] != g_modbus_expected_slave) ||
         (g_modbus_response[1] != g_modbus_expected_function))
@@ -104,6 +107,7 @@ static void ModbusRtu_UpdateExpectedLength(void)
     }
 
     function = g_modbus_response[1];
+    // Modbus异常响应固定为地址、异常功能码、异常码和CRC共5字节
     if (function == (uint8)(g_modbus_expected_function | 0x80u))
     {
         g_modbus_expected_length = 5u;
@@ -117,12 +121,12 @@ static void ModbusRtu_UpdateExpectedLength(void)
 
     if (function == MODBUS_FUNCTION_WRITE_SINGLE_COIL)
     {
-        g_modbus_expected_length = 8u;
+        g_modbus_expected_length = 8u; // 写单线圈正常响应完整回显请求
     }
     else if ((function == MODBUS_FUNCTION_READ_HOLDING) &&
              (g_modbus_response_length >= 3u))
     {
-        g_modbus_expected_length = (uint8)(g_modbus_response[2] + 5u);
+        g_modbus_expected_length = (uint8)(g_modbus_response[2] + 5u); // 地址、功能、字节数、数据、CRC
         if (g_modbus_expected_length > MODBUS_RESPONSE_MAX_LENGTH)
         {
             g_modbus_state = MODBUS_STATE_ERROR;
@@ -163,6 +167,7 @@ bit ModbusRtu_StartReadHolding(uint8 slave, uint16 address, uint16 count)
         return 0;
     }
 
+    // 多字节地址和数量按Modbus大端顺序装入请求
     request[0] = slave;
     request[1] = MODBUS_FUNCTION_READ_HOLDING;
     request[2] = (uint8)(address >> 8);
@@ -190,6 +195,7 @@ bit ModbusRtu_StartWriteSingleCoil(uint8 slave, uint16 address, uint16 value)
         return 0;
     }
 
+    // 多字节线圈地址和值按Modbus大端顺序装入请求
     request[0] = slave;
     request[1] = MODBUS_FUNCTION_WRITE_SINGLE_COIL;
     request[2] = (uint8)(address >> 8);
@@ -212,12 +218,14 @@ void ModbusRtu_Poll(void)
     {
         return;
     }
+    // 缓冲溢出后帧内容不完整，直接终止当前事务
     if (Rs485_TakeRxOverflow())
     {
         g_modbus_state = MODBUS_STATE_ERROR;
         return;
     }
 
+    // 按响应头动态确定长度，收满后立即校验而不等待静默间隔
     while (Rs485_ReadByte(&dat))
     {
         if (g_modbus_response_length >= MODBUS_RESPONSE_MAX_LENGTH)
@@ -235,6 +243,7 @@ void ModbusRtu_Poll(void)
         if ((g_modbus_expected_length > 0u) &&
             (g_modbus_response_length == g_modbus_expected_length))
         {
+            // 从机异常响应不作为正常业务数据返回
             if (g_modbus_response[1] ==
                 (uint8)(g_modbus_expected_function | 0x80u))
             {
@@ -254,6 +263,7 @@ void ModbusRtu_Poll(void)
         }
     }
 
+    // 使用时间差判断超时，允许系统毫秒计数自然回绕
     if (Timer0_HasElapsed(g_modbus_start_ms, MODBUS_RESPONSE_TIMEOUT_MS))
     {
         g_modbus_state = MODBUS_STATE_ERROR;
@@ -280,6 +290,7 @@ ModbusRtuResult_t ModbusRtu_TakeResponse(uint8 *buffer, uint8 *length)
 {
     uint8 index;
 
+    // 错误状态消费后立即回到空闲，下一请求可以重新开始
     if (g_modbus_state == MODBUS_STATE_ERROR)
     {
         g_modbus_state = MODBUS_STATE_IDLE;
@@ -297,6 +308,7 @@ ModbusRtuResult_t ModbusRtu_TakeResponse(uint8 *buffer, uint8 *length)
     }
 
     *length = g_modbus_response_length;
+    // 复制到调用方缓冲后清除内部事务状态，响应只交付一次
     for (index = 0u; index < g_modbus_response_length; index++)
     {
         buffer[index] = g_modbus_response[index];
@@ -325,6 +337,7 @@ uint16 ModbusRtu_CalcCrc(const uint8 *buffer, uint8 length)
     }
 
     crc = 0xFFFFu;
+    // 使用Modbus多项式0xA001，逐字节按最低位优先计算
     for (byte_index = 0u; byte_index < length; byte_index++)
     {
         crc ^= buffer[byte_index];

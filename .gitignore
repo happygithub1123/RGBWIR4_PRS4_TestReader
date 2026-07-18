@@ -12,4 +12,5 @@
 *.build_log.htm
 *.uvopt*
 *.uvguix.*
+*.uvgui.*
 *.bak

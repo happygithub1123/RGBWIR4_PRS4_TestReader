@@ -13,6 +13,7 @@ void Delay_ms(uint16 delay_ms)
 {
     uint16 i;
 
+    // 循环次数按22.1184 MHz和当前优化等级标定，仅用于上电稳定等待
     while (delay_ms--)
     {
         for (i = 0u; i < 2760u; i++)
