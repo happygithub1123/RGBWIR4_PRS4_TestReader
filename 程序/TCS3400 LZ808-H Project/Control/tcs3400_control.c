@@ -295,12 +295,12 @@ void Tcs3400Control_Init(void)
 
 /**
  * @brief  启动TCS3400命令
- * @param  sensor 传感器编号1至4
- * @param  operation 操作编号0至9
+ * @param  target_code 目标码，传感器编号1至4
+ * @param  function_code 功能码0至9
  * @param  parameter MTF参数
  * @retval 1：命令格式有效并已接收；0：命令或参数无效
  */
-bit Tcs3400Control_Start(uint8 sensor, uint8 operation, uint16 parameter)
+bit Tcs3400Control_Start(uint8 target_code, uint8 function_code, uint16 parameter)
 {
     bit rollback_ok;
     uint8 sensor_index;
@@ -310,18 +310,18 @@ bit Tcs3400Control_Start(uint8 sensor, uint8 operation, uint16 parameter)
     float actual_value;
 
     // 校验设备范围并保护正在运行或尚未消费的结果
-    if ((sensor < 1u) || (sensor > TCS3400_SENSOR_COUNT) ||
+    if ((target_code < 1u) || (target_code > TCS3400_SENSOR_COUNT) ||
         (g_tcs_task_state != TCS_TASK_IDLE) ||
         (g_tcs_result_state != PROJECT_ASYNC_RESULT_NONE))
     {
         return 0;
     }
 
-    sensor_index = (uint8)(sensor - 1u);
+    sensor_index = (uint8)(target_code - 1u);
     g_tcs_task_sensor = sensor_index;
 
     // x0设置五档积分时间，写入成功后才更新该路缓存
-    if (operation == 0u)
+    if (function_code == 0u)
     {
         if (!Tcs3400Control_GetIntegrationConfig(parameter, &register_value,
                                                   &wait_ms, &actual_value))
@@ -353,7 +353,7 @@ bit Tcs3400Control_Start(uint8 sensor, uint8 operation, uint16 parameter)
     }
 
     // x1至x5只读取当前配置下的新数据，EFG必须固定为000
-    if ((operation >= 1u) && (operation <= 5u))
+    if ((function_code >= 1u) && (function_code <= 5u))
     {
         if (parameter != 0u)
         {
@@ -364,15 +364,15 @@ bit Tcs3400Control_Start(uint8 sensor, uint8 operation, uint16 parameter)
             Tcs3400Control_Finish(PROJECT_ASYNC_RESULT_ERROR, 0.0f);
             return 1;
         }
-        if (operation == 5u)
+        if (function_code == 5u)
         {
             return Tcs3400Control_StartIr(sensor_index);
         }
-        return Tcs3400Control_StartRgbc(sensor_index, operation);
+        return Tcs3400Control_StartRgbc(sensor_index, function_code);
     }
 
     // x6设置四档增益，写入成功后才更新该路缓存
-    if (operation == 6u)
+    if (function_code == 6u)
     {
         if (!Tcs3400Control_GetGainRegister(parameter, &register_value))
         {
@@ -401,16 +401,16 @@ bit Tcs3400Control_Start(uint8 sensor, uint8 operation, uint16 parameter)
     }
 
     // x7和x8为保留操作，任何参数都不访问底层硬件
-    if ((operation == 7u) || (operation == 8u))
+    if ((function_code == 7u) || (function_code == 8u))
     {
         return 0;
     }
-    if ((operation == 9u) && (parameter != 0u))
+    if ((function_code == 9u) && (parameter != 0u))
     {
         return 0;
     }
     // x9只允许EFG=000，并直接返回真实ID寄存器值
-    if (operation == 9u)
+    if (function_code == 9u)
     {
         if (!Tcs3400Control_EnsureInitialized(sensor_index))
         {

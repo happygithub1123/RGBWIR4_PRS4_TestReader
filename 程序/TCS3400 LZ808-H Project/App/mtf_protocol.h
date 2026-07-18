@@ -5,7 +5,7 @@
 
 typedef struct
 {
-    uint8 command;
+    uint8 command_code;
     uint16 parameter;
 } MtfRequest_t;
 

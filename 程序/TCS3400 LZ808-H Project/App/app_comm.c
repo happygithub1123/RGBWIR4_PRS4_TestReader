@@ -45,8 +45,8 @@ static void AppComm_ProcessFrame(const uint8 *buffer)
         MtfProtocol_SendError();
         return;
     }
-    // 业务层负责校验AB命令和EFG取值范围
-    if (!SensorControl_Start(request.command, request.parameter))
+    // 业务层负责校验AB指令码和EFG取值范围
+    if (!SensorControl_Start(request.command_code, request.parameter))
     {
         MtfProtocol_SendError();
         return;

@@ -32,15 +32,15 @@ void SensorControl_Init(void)
 }
 
 /**
- * @brief  按AB命令启动传感器操作
- * @param  command AB十进制命令码
+ * @brief  按AB指令码启动传感器操作
+ * @param  command_code AB十进制指令码
  * @param  parameter EFG参数
  * @retval 1：命令已接收；0：命令、参数或忙状态错误
  */
-bit SensorControl_Start(uint8 command, uint16 parameter)
+bit SensorControl_Start(uint8 command_code, uint16 parameter)
 {
-    uint8 sensor;
-    uint8 operation;
+    uint8 target_code;
+    uint8 function_code;
 
     // 任一子控制器占用期间都拒绝覆盖当前命令来源
     if (SensorControl_IsBusy())
@@ -48,12 +48,14 @@ bit SensorControl_Start(uint8 command, uint16 parameter)
         return 0;
     }
 
-    // 10至49按十位选择TCS3400，个位选择具体操作
-    if ((command >= 10u) && (command <= 49u))
+    target_code = command_code / 10u;     // A：目标码
+    function_code = command_code % 10u;   // B：功能码
+
+    // 目标码1至4选择TCS3400，功能码选择该路具体操作
+    if ((target_code >= MTF_TARGET_CODE_TCS3400_MIN) &&
+        (target_code <= MTF_TARGET_CODE_TCS3400_MAX))
     {
-        sensor = command / 10u;
-        operation = command % 10u;
-        if (!Tcs3400Control_Start(sensor, operation, parameter))
+        if (!Tcs3400Control_Start(target_code, function_code, parameter))
         {
             return 0;
         }
@@ -63,7 +65,8 @@ bit SensorControl_Start(uint8 command, uint16 parameter)
     }
 
     // 压力命令的EFG直接作为实际Modbus从机地址
-    if ((command == MTF_COMMAND_PRESSURE_READ) &&
+    if ((target_code == MTF_TARGET_CODE_PRESSURE) &&
+        (function_code == MTF_FUNCTION_CODE_PRESSURE_READ) &&
         (parameter >= MODBUS_SLAVE_ADDRESS_MIN) &&
         (parameter <= MODBUS_SLAVE_ADDRESS_MAX))
     {
@@ -75,7 +78,8 @@ bit SensorControl_Start(uint8 command, uint16 parameter)
         return 1;
     }
 
-    if ((command == MTF_COMMAND_PRESSURE_ZERO) &&
+    if ((target_code == MTF_TARGET_CODE_PRESSURE) &&
+        (function_code == MTF_FUNCTION_CODE_PRESSURE_ZERO) &&
         (parameter >= MODBUS_SLAVE_ADDRESS_MIN) &&
         (parameter <= MODBUS_SLAVE_ADDRESS_MAX))
     {

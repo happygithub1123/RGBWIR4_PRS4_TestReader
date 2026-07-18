@@ -33,7 +33,7 @@ System
 
 - `User`：程序入口、初始化顺序和主循环。
 - `App`：UART1 组帧、MTF 格式校验、请求提交和返回帧发送。
-- `Control`：AB 命令分发、参数校验、TCS3400 与压力业务状态机。
+- `Control`：AB 指令码分发、参数校验、TCS3400 与压力业务状态机。
 - `Hardware`：软件 I2C、TCS3400 寄存器、Modbus RTU、压力仪表寄存器语义及板级功能模块。
 - `System`：时钟、GPIO、UART、Timer、RS485 方向和初始化延时。
 - `Public`：类型、板级常量、默认参数、超时和协议位置。
@@ -60,16 +60,20 @@ MTF:AB-CD-EFG\r\n
 ```c
 typedef struct
 {
-    uint8 command;
+    uint8 command_code;
     uint16 parameter;
 } MtfRequest_t;
 ```
+
+协议说明、联调记录和代码统一使用 `command_code`（AB）、`target_code`（A）、
+`function_code`（B）和 `parameter`（EFG）。`reserved_code` 是 CD 的字段名称，
+只用于说明和格式校验；代码不得把它解析或保存到 `MtfRequest_t`，也不得传入 Control。
 
 ## 4. 字段规则
 
 ### 4.1 AB
 
-AB 是唯一命令码，两个字符可解析为 `00~99` 的十进制数。格式层允许任意两位数字，业务层只接受本文定义的命令；未定义 AB 返回统一异常帧。
+AB 是唯一指令码，两个字符可解析为 `00~99` 的十进制数。格式层允许任意两位数字，业务层只接受本文定义的命令；未定义 AB 返回统一异常帧。
 
 ### 4.2 CD
 
