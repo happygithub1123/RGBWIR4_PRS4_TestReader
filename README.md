@@ -116,7 +116,7 @@ MTF:61-00-200\r\n    设置第1组上限200
 MTF:62-00-003\r\n    读取地址3，比较后控制Y1
 ```
 
-设置上下限时返回设置值 Float；读取并比较时返回实际压力 Float。低于下限或高于上限时，ULN2003 将对应 Y 输出拉低；等于限值不触发。四组限值只保存在 RAM，重新上电后全部清除。
+设置上下限时返回设置值 Float；读取并比较时仍返回带正负号的实际压力 Float。限值判断使用实际压力的绝对值：`|压力|` 低于下限或高于上限时，ULN2003 将对应 Y 输出拉低；等于限值不触发。四组限值只保存在 RAM，重新上电后全部清除。
 
 ## 返回帧
 
@@ -155,7 +155,7 @@ User -> App -> Control -> Hardware -> System
 
 1. 使用 Keil C51 打开 `程序/TCS3400 LZ808-H Project/Project.uvproj`。
 2. 选择 `Target 1` 并执行 Rebuild。
-3. 当前 `feature/v1.3` 构建结果为 `0 Error(s), 0 Warning(s)`，`data=89.3、xdata=193、code=10065`。
+3. 当前 `feature/v1.3` 构建结果为 `0 Error(s), 0 Warning(s)`，`data=89.3、xdata=193、code=10149`。
 
 Keil 的 `Objects/`、`Listings/`、HEX 和本机 `uvgui` 文件不提交到源码仓库。V1.2 的 HEX 固件作为 GitHub Release 附件提供。
 

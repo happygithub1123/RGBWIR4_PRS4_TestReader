@@ -75,24 +75,30 @@ static bit PressureControl_Scale(int16 raw_value, int16 decimal_places, float *v
 /**
  * @brief  按当前限值更新指定Y输出
  * @param  channel 压力逻辑通道1~4
- * @param  value 当前实际压力值
+ * @param  actual_value 当前带符号实际压力值
  * @retval 无
  */
-static void PressureControl_UpdateTrigger(uint8 channel, float value)
+static void PressureControl_UpdateTrigger(uint8 channel, float actual_value)
 {
     uint8 index;
     uint8 active;
+    float comparison_value;
 
     index = channel - 1u;
     active = 0u;
+    comparison_value = actual_value;
+    if (comparison_value < 0.0f)
+    {
+        comparison_value = -comparison_value; // 限值只比较压力大小，不判断正负方向
+    }
 
     if ((g_pressure_limit[index].lower_enabled != 0u) &&
-        (value < (float)g_pressure_limit[index].lower_limit))
+        (comparison_value < (float)g_pressure_limit[index].lower_limit))
     {
         active = 1u;
     }
     if ((g_pressure_limit[index].upper_enabled != 0u) &&
-        (value > (float)g_pressure_limit[index].upper_limit))
+        (comparison_value > (float)g_pressure_limit[index].upper_limit))
     {
         active = 1u;
     }
