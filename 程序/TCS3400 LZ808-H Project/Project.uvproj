@@ -442,9 +442,9 @@
               <FilePath>.\Hardware\pressure_meter.c</FilePath>
             </File>
             <File>
-              <FileName>input_follow.c</FileName>
+              <FileName>trigger_output.c</FileName>
               <FileType>1</FileType>
-              <FilePath>.\Hardware\input_follow.c</FilePath>
+              <FilePath>.\Hardware\trigger_output.c</FilePath>
             </File>
             <File>
               <FileName>run_led.c</FileName>

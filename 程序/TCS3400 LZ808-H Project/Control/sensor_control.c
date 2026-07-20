@@ -41,6 +41,7 @@ bit SensorControl_Start(uint8 command_code, uint16 parameter)
 {
     uint8 target_code;
     uint8 function_code;
+    uint8 pressure_channel;
 
     // 任一子控制器占用期间都拒绝覆盖当前命令来源
     if (SensorControl_IsBusy())
@@ -87,6 +88,46 @@ bit SensorControl_Start(uint8 command_code, uint16 parameter)
         {
             return 0;
         }
+        g_sensor_source = SENSOR_SOURCE_PRESSURE;
+        return 1;
+    }
+
+    // 目标码6~9分别保存一组限值，并固定控制Y1~Y4
+    if ((target_code >= MTF_TARGET_CODE_PRESSURE_LIMIT_MIN) &&
+        (target_code <= MTF_TARGET_CODE_PRESSURE_LIMIT_MAX))
+    {
+        pressure_channel =
+            (uint8)(target_code - MTF_TARGET_CODE_PRESSURE_LIMIT_MIN + 1u);
+
+        if (function_code == MTF_FUNCTION_CODE_LIMIT_LOWER)
+        {
+            if (!PressureControl_SetLowerLimit(pressure_channel, parameter))
+            {
+                return 0;
+            }
+        }
+        else if (function_code == MTF_FUNCTION_CODE_LIMIT_UPPER)
+        {
+            if (!PressureControl_SetUpperLimit(pressure_channel, parameter))
+            {
+                return 0;
+            }
+        }
+        else if ((function_code == MTF_FUNCTION_CODE_LIMIT_READ) &&
+                 (parameter >= MODBUS_SLAVE_ADDRESS_MIN) &&
+                 (parameter <= MODBUS_SLAVE_ADDRESS_MAX))
+        {
+            if (!PressureControl_StartCompareRead(pressure_channel,
+                                                  (uint8)parameter))
+            {
+                return 0;
+            }
+        }
+        else
+        {
+            return 0;
+        }
+
         g_sensor_source = SENSOR_SOURCE_PRESSURE;
         return 1;
     }
