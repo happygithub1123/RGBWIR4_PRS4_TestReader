@@ -51,24 +51,24 @@ bit MtfProtocol_ParseFrame(const uint8 *buffer, uint8 length, MtfRequest_t *requ
     }
 
     // AB、CD、EFG必须全为数字，CD只校验格式而不保存
-    if (!MtfProtocol_IsDigit(buffer[MTF_FRAME_COMMAND_TENS_INDEX]) ||
-        !MtfProtocol_IsDigit(buffer[MTF_FRAME_COMMAND_ONES_INDEX]) ||
-        !MtfProtocol_IsDigit(buffer[MTF_FRAME_PLACEHOLDER_1_INDEX]) ||
-        !MtfProtocol_IsDigit(buffer[MTF_FRAME_PLACEHOLDER_2_INDEX]) ||
-        !MtfProtocol_IsDigit(buffer[MTF_FRAME_PARAMETER_100_INDEX]) ||
-        !MtfProtocol_IsDigit(buffer[MTF_FRAME_PARAMETER_10_INDEX]) ||
-        !MtfProtocol_IsDigit(buffer[MTF_FRAME_PARAMETER_1_INDEX]))
+    if (!MtfProtocol_IsDigit(buffer[MTF_FRAME_TARGET_CODE_INDEX]) ||
+        !MtfProtocol_IsDigit(buffer[MTF_FRAME_FUNCTION_CODE_INDEX]) ||
+        !MtfProtocol_IsDigit(buffer[MTF_FRAME_RESERVED_TENS_INDEX]) ||
+        !MtfProtocol_IsDigit(buffer[MTF_FRAME_RESERVED_ONES_INDEX]) ||
+        !MtfProtocol_IsDigit(buffer[MTF_FRAME_PARAMETER_HUNDREDS_INDEX]) ||
+        !MtfProtocol_IsDigit(buffer[MTF_FRAME_PARAMETER_TENS_INDEX]) ||
+        !MtfProtocol_IsDigit(buffer[MTF_FRAME_PARAMETER_ONES_INDEX]))
     {
         return 0;
     }
 
-    request->command =
-        (uint8)(((buffer[MTF_FRAME_COMMAND_TENS_INDEX] - '0') * 10u) +
-                 (buffer[MTF_FRAME_COMMAND_ONES_INDEX] - '0'));
+    request->command_code =
+        (uint8)(((buffer[MTF_FRAME_TARGET_CODE_INDEX] - '0') * 10u) +
+                 (buffer[MTF_FRAME_FUNCTION_CODE_INDEX] - '0'));
     request->parameter =
-        (uint16)(((buffer[MTF_FRAME_PARAMETER_100_INDEX] - '0') * 100u) +
-                 ((buffer[MTF_FRAME_PARAMETER_10_INDEX] - '0') * 10u) +
-                  (buffer[MTF_FRAME_PARAMETER_1_INDEX] - '0'));
+        (uint16)(((buffer[MTF_FRAME_PARAMETER_HUNDREDS_INDEX] - '0') * 100u) +
+                 ((buffer[MTF_FRAME_PARAMETER_TENS_INDEX] - '0') * 10u) +
+                  (buffer[MTF_FRAME_PARAMETER_ONES_INDEX] - '0'));
     return 1;
 }
 
