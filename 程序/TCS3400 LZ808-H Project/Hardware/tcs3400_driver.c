@@ -42,12 +42,9 @@ static bit TCS3400_ReadUint16(SoftI2C_Bus_t bus, uint8 reg_low, uint16 *value)
     {
         return 0;
     }
-    if (!SoftI2C_ReadRegister(bus, TCS3400_I2C_ADDRESS, reg_low, &bytes[0]))
-    {
-        return 0;
-    }
-    if (!SoftI2C_ReadRegister(bus, TCS3400_I2C_ADDRESS,
-                              (uint8)(reg_low + 1u), &bytes[1]))
+    // 从偶数低字节地址开始连续读取，低字节读取时芯片会锁存对应高字节
+    if (!SoftI2C_ReadRegisters(bus, TCS3400_I2C_ADDRESS,
+                               reg_low, bytes, 2u))
     {
         return 0;
     }
@@ -212,43 +209,36 @@ bit TCS3400_GetDataValid(SoftI2C_Bus_t bus, uint8 *valid)
 }
 
 /**
- * @brief  读取RGBC四通道原始值
+ * @brief  读取指定通道原始值
  * @param  bus 总线编号
- * @param  rgbc RGBC数据存放地址
- * @retval 1：读取成功；0：参数或通信错误
- */
-bit TCS3400_ReadRGBC(SoftI2C_Bus_t bus, Tcs3400RgbcData_t *rgbc)
-{
-    if (rgbc == 0)
-    {
-        return 0;
-    }
-    // 任一通道读取失败即判定整帧无效，禁止返回部分数据
-    if (!TCS3400_ReadUint16(bus, TCS3400_REG_CLEAR_LOW, &rgbc->clear))
-    {
-        return 0;
-    }
-    if (!TCS3400_ReadUint16(bus, TCS3400_REG_RED_LOW, &rgbc->red))
-    {
-        return 0;
-    }
-    if (!TCS3400_ReadUint16(bus, TCS3400_REG_GREEN_LOW, &rgbc->green))
-    {
-        return 0;
-    }
-
-    return TCS3400_ReadUint16(bus, TCS3400_REG_BLUE_LOW, &rgbc->blue);
-}
-
-/**
- * @brief  读取Clear数据口原始值
- * @param  bus 总线编号
+ * @param  channel Clear、R、G或B通道
  * @param  value 原始值存放地址
  * @retval 1：读取成功；0：参数或通信错误
  */
-bit TCS3400_ReadClearPort(SoftI2C_Bus_t bus, uint16 *value)
+bit TCS3400_ReadChannel(SoftI2C_Bus_t bus, Tcs3400Channel_t channel,
+                        uint16 *value)
 {
-    return TCS3400_ReadUint16(bus, TCS3400_REG_CLEAR_LOW, value);
+    uint8 reg_low;
+
+    switch (channel)
+    {
+        case TCS3400_CHANNEL_CLEAR:
+            reg_low = TCS3400_REG_CLEAR_LOW;
+            break;
+        case TCS3400_CHANNEL_RED:
+            reg_low = TCS3400_REG_RED_LOW;
+            break;
+        case TCS3400_CHANNEL_GREEN:
+            reg_low = TCS3400_REG_GREEN_LOW;
+            break;
+        case TCS3400_CHANNEL_BLUE:
+            reg_low = TCS3400_REG_BLUE_LOW;
+            break;
+        default:
+            return 0;
+    }
+
+    return TCS3400_ReadUint16(bus, reg_low, value);
 }
 
 /**

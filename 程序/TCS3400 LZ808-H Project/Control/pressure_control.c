@@ -22,14 +22,13 @@ typedef struct
     uint8 upper_enabled;
 } PressureLimitConfig_t;
 
-static PressureTaskState_t g_pressure_task_state;
-static ProjectAsyncResult_t g_pressure_result_state;
-static uint8 g_pressure_slave;
-static int16 g_pressure_raw_value;
-static float g_pressure_result_value;
-static PressureLimitConfig_t xdata g_pressure_limit[PRESSURE_LIMIT_CHANNEL_COUNT];
-static uint8 g_pressure_compare_channel;
-static bit g_pressure_compare_enabled;
+static PressureTaskState_t g_pressure_task_state;                         //保存当前压力控制异步任务阶段
+static ProjectAsyncResult_t g_pressure_result_state;                      //保存压力命令完成后返回给上层的结果状态
+static uint8 g_pressure_slave;                                            //记录当前压力命令访问的Modbus从机地址
+static int16 g_pressure_raw_value;                                        //暂存压力仪表读取到的原始有符号压力值
+static float g_pressure_result_value;                                     //保存压力命令正常返回的浮点结果
+static PressureLimitConfig_t xdata g_pressure_limit[PRESSURE_LIMIT_CHANNEL_COUNT]; //保存四路压力上下限配置
+static uint8 g_pressure_compare_channel;                                  //记录当前读数需要比较并更新的Y输出通道
 
 /**
  * @brief  完成当前压力命令
@@ -43,31 +42,24 @@ static void PressureControl_Finish(ProjectAsyncResult_t result, float value)
     g_pressure_result_state = result;           // 保留结果等待上层消费
     g_pressure_result_value = value;
     g_pressure_compare_channel = 0u;
-    g_pressure_compare_enabled = 0;
 }
 
 /**
  * @brief  按仪表小数位缩放压力值
  * @param  raw_value 有符号原始值
- * @param  decimal_places 小数位数0至4
+ * @param  decimal_places 小数位数0至3
  * @param  value 实际压力值存放地址
  * @retval 1：缩放成功；0：小数位非法
  */
 static bit PressureControl_Scale(int16 raw_value, int16 decimal_places, float *value)
 {
-    if (value == 0)
-    {
-        return 0;
-    }
-
-    // 仪表仅定义0至4位小数，超出范围视为响应内容错误
+    // 仪表手册只定义0至3位小数，其他值不作为有效压力返回
     switch (decimal_places)
     {
         case 0: *value = (float)raw_value; return 1;
         case 1: *value = (float)raw_value / 10.0f; return 1;
         case 2: *value = (float)raw_value / 100.0f; return 1;
         case 3: *value = (float)raw_value / 1000.0f; return 1;
-        case 4: *value = (float)raw_value / 10000.0f; return 1;
         default: return 0;
     }
 }
@@ -127,7 +119,6 @@ static bit PressureControl_StartReadTask(uint8 slave, uint8 compare_channel)
 
     g_pressure_slave = slave;
     g_pressure_compare_channel = compare_channel;
-    g_pressure_compare_enabled = (compare_channel != 0u) ? 1 : 0;
     g_pressure_task_state = PRESSURE_TASK_WAIT_VALUE; // 第一帧读取原始压力
     return 1;
 }
@@ -153,7 +144,6 @@ void PressureControl_Init(void)
     g_pressure_raw_value = 0;
     g_pressure_result_value = 0.0f;
     g_pressure_compare_channel = 0u;
-    g_pressure_compare_enabled = 0;
 
     // 上电只清除RAM限值和Y输出，不向任何压力仪表写配置
     for (index = 0u; index < PRESSURE_LIMIT_CHANNEL_COUNT; index++)
@@ -269,9 +259,7 @@ bit PressureControl_StartZero(uint8 slave)
         return 0;
     }
 
-    g_pressure_slave = slave;
     g_pressure_compare_channel = 0u;
-    g_pressure_compare_enabled = 0;
     g_pressure_task_state = PRESSURE_TASK_WAIT_ZERO; // 等待写线圈回显
     return 1;
 }
@@ -326,7 +314,7 @@ void PressureControl_Poll(void)
             return;
         }
 
-        if (g_pressure_compare_enabled)
+        if (g_pressure_compare_channel != 0u)
         {
             PressureControl_UpdateTrigger(g_pressure_compare_channel, scaled_value);
         }
