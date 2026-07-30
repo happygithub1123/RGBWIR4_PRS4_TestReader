@@ -20,7 +20,8 @@ sbit Y4_CONTROL_PIN = P5 ^ 0;
  */
 void TriggerOutput_Init(void)
 {
-    // MCU低电平使ULN2003截止，外部Y端保持不触发
+    // 本项目中该函数在主板上电时释放Y1至Y4，防止压力治具出现误触发
+    // MCU输出低电平使ULN2003截止，主板上电时Y1至Y4全部保持不触发
     Y1_CONTROL_PIN = 0;
     Y2_CONTROL_PIN = 0;
     Y3_CONTROL_PIN = 0;
@@ -35,6 +36,7 @@ void TriggerOutput_Init(void)
  */
 void TriggerOutput_Set(uint8 channel, uint8 active)
 {
+    // 本项目中该函数把指定压力逻辑通道的比较结果转换为对应MCU引脚电平
     uint8 pin_level;
 
     pin_level = (active != 0u) ? 1u : 0u;

@@ -8,10 +8,10 @@
  内部定义
  *============================================================================*/
 
-static uint8 idata g_app_rx_buffer[MTF_REQUEST_FRAME_LENGTH];
-static uint8 g_app_rx_index;
-static bit g_app_request_pending;
-static uint32 g_app_rx_start_ms;
+static uint8 idata g_app_rx_buffer[MTF_REQUEST_FRAME_LENGTH]; // 缓存ICT通过UART1发送的15字节MTF请求
+static uint8 g_app_rx_index;                                  // 记录当前MTF请求已经缓存的字节数
+static bit g_app_request_pending;                             // 标记当前ICT请求正在等待唯一一帧传感器结果
+static uint32 g_app_rx_start_ms;                              // 记录MTF首字节到达时刻，用于判断50ms收帧超时
 
 /**
  * @brief  清除当前不完整请求帧
@@ -20,8 +20,9 @@ static uint32 g_app_rx_start_ms;
  */
 static void AppComm_ResetReceiver(void)
 {
-    g_app_rx_index = 0u;       // 丢弃当前未完成帧
-    g_app_rx_start_ms = 0UL;   // 取消本帧接收超时计时
+    // 本项目中该函数统一清除一条未完成MTF请求的缓存位置和超时起点
+    g_app_rx_index = 0u;       // 丢弃当前未完成的MTF帧并从帧头重新同步
+    g_app_rx_start_ms = 0;     // 清除当前MTF帧的50ms超时计时起点
 }
 
 /**
@@ -31,28 +32,29 @@ static void AppComm_ResetReceiver(void)
  */
 static void AppComm_ProcessFrame(const uint8 *buffer)
 {
+    // 本项目中该函数把完整MTF帧转换成传感器任务，并保证格式错误只返回异常
     MtfRequest_t request;
 
-    // 格式错误时不进入业务层，也不访问任何传感器
+    // MTF格式错误时不访问TCS3400或压力仪表，只向ICT返回统一异常
     if (!MtfProtocol_ParseFrame(buffer, MTF_REQUEST_FRAME_LENGTH, &request))
     {
         MtfProtocol_SendError();
         return;
     }
-    // 严格一问一答，上一请求未完成时拒绝新请求
+    // 本项目严格一问一答，上一条传感器命令未返回前拒绝覆盖当前任务
     if (g_app_request_pending || SensorControl_IsBusy())
     {
         MtfProtocol_SendError();
         return;
     }
-    // 业务层负责校验AB指令码和EFG取值范围
+    // 统一控制层继续校验Pin1命令含义和工作值2范围，CD保留码不参与判断
     if (!SensorControl_Start(request.command_code, request.parameter))
     {
         MtfProtocol_SendError();
         return;
     }
 
-    g_app_request_pending = 1; // 等待异步操作产生唯一响应
+    g_app_request_pending = 1; // 记录该ICT请求已启动，后续只允许发送一帧最终响应
 }
 
 /**
@@ -62,9 +64,10 @@ static void AppComm_ProcessFrame(const uint8 *buffer)
  */
 static void AppComm_HandleByte(uint8 dat)
 {
+    // 本项目中该函数在主循环内逐字节拼接固定15字节MTF请求，不在中断中解析协议
     if (g_app_rx_index == 0u)
     {
-        // 空闲时只接受帧头M，用于从连续字节流重新同步
+        // UART1空闲时只接受MTF帧头M，避免旧字节或噪声被拼入新命令
         if (dat != 'M')
         {
             return;
@@ -72,12 +75,12 @@ static void AppComm_HandleByte(uint8 dat)
 
         g_app_rx_buffer[0] = dat;
         g_app_rx_index = 1u;
-        g_app_rx_start_ms = Timer0_GetMs(); // 从首字节开始计算整帧超时
+        g_app_rx_start_ms = Timer0_GetMs(); // 从字符M到达时开始计算MTF整帧50ms超时
         return;
     }
 
     g_app_rx_buffer[g_app_rx_index++] = dat;
-    // 提前收到换行表示帧长错误，立即清帧并返回异常
+    // 未收满15字节就收到换行说明ICT帧长错误，立即丢帧并返回异常
     if ((dat == '\n') && (g_app_rx_index != MTF_REQUEST_FRAME_LENGTH))
     {
         AppComm_ResetReceiver();
@@ -85,7 +88,7 @@ static void AppComm_HandleByte(uint8 dat)
         return;
     }
 
-    // 固定收满15字节后一次性校验，接收阶段不解析字段
+    // 收满15字节后再统一校验MTF结构，UART1收字节阶段不执行传感器业务
     if (g_app_rx_index == MTF_REQUEST_FRAME_LENGTH)
     {
         AppComm_ProcessFrame(g_app_rx_buffer);
@@ -100,6 +103,7 @@ static void AppComm_HandleByte(uint8 dat)
  */
 static void AppComm_PollResult(void)
 {
+    // 本项目中该函数检查异步传感器任务，并在完成后向ICT发送唯一一帧Float结果
     float value;
     ProjectAsyncResult_t result;
 
@@ -109,7 +113,7 @@ static void AppComm_PollResult(void)
         return;
     }
 
-    result = SensorControl_TakeResult(&value); // 结果只允许消费一次
+    result = SensorControl_TakeResult(&value); // 取走当前传感器结果并保证该ICT命令只响应一次
     if (result == PROJECT_ASYNC_RESULT_SUCCESS)
     {
         MtfProtocol_SendValue(value);
@@ -133,8 +137,9 @@ static void AppComm_PollResult(void)
  */
 void AppComm_Init(void)
 {
+    // 本项目中该函数建立MTF应用层上电空闲状态，并清空UART1可能残留的请求字节
     AppComm_ResetReceiver();
-    g_app_request_pending = 0; // 上电时没有待回复请求
+    g_app_request_pending = 0; // 主板上电时没有正在等待回复的ICT请求
     Uart1_ClearRx();
 }
 
@@ -145,10 +150,11 @@ void AppComm_Init(void)
  */
 void AppComm_Poll(void)
 {
+    // 本项目中该函数每轮先处理MTF超时和UART1溢出，再排空字节并推进传感器结果
     uint8 dat;
 
     AppComm_PollResult();
-    // 不完整帧超时后清除接收状态，避免后续字节拼入旧帧
+    // MTF不完整帧超过50ms后清空状态，防止后续命令继续拼接旧数据
     if ((g_app_rx_index > 0u) &&
         Timer0_HasElapsed(g_app_rx_start_ms, MTF_RECEIVE_TIMEOUT_MS))
     {
@@ -156,7 +162,7 @@ void AppComm_Poll(void)
         MtfProtocol_SendError();
     }
 
-    // 环形缓冲溢出后帧边界已不可信，必须整体丢弃
+    // UART1环形缓冲溢出后MTF帧边界已经丢失，整帧作废并返回异常
     if (Uart1_TakeRxOverflow())
     {
         Uart1_ClearRx();
@@ -165,7 +171,7 @@ void AppComm_Poll(void)
         return;
     }
 
-    // 单次轮询排空当前缓存，不在中断内执行协议解析
+    // 主循环一次排空UART1缓存，协议解析和传感器访问始终不放进中断
     while (Uart1_ReadByte(&dat))
     {
         AppComm_HandleByte(dat);

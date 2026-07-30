@@ -6,7 +6,7 @@
  *============================================================================*/
 
 sbit RUN_LED_PIN = P5 ^ 4;
-static uint32 g_run_led_last_ms;
+static uint32 g_run_led_last_ms; // 记录主板运行灯上一次翻转时的系统毫秒值
 
 /*==============================================================================
  对外函数
@@ -19,6 +19,7 @@ static uint32 g_run_led_last_ms;
  */
 void RunLed_Init(void)
 {
+    // 本项目中该函数设置运行灯上电电平，并记录第一次1秒翻转的计时起点
     RUN_LED_PIN = 1;
     g_run_led_last_ms = Timer0_GetMs();
 }
@@ -30,7 +31,8 @@ void RunLed_Init(void)
  */
 void RunLed_Poll(void)
 {
-    // 使用时间差判断周期，允许32位毫秒计数自然回绕
+    // 本项目中该函数用Timer0时基每1秒翻转运行灯，直观显示主循环仍在执行
+    // 用Timer0时间差每1秒翻转运行灯，即使32位毫秒计数回绕也保持正确周期
     if (Timer0_HasElapsed(g_run_led_last_ms, 1000u))
     {
         g_run_led_last_ms = Timer0_GetMs();

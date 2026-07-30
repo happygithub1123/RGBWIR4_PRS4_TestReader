@@ -8,28 +8,27 @@
 
 typedef enum
 {
-    PRESSURE_TASK_IDLE = 0,
-    PRESSURE_TASK_WAIT_VALUE,
-    PRESSURE_TASK_WAIT_DECIMAL,
-    PRESSURE_TASK_WAIT_ZERO
-} PressureTaskState_t;
+    PRESSURE_TASK_IDLE = 0,      // 本项目中表示当前没有压力仪表命令
+    PRESSURE_TASK_WAIT_VALUE,    // 本项目中表示正在等待0x0000压力原始值
+    PRESSURE_TASK_WAIT_DECIMAL,  // 本项目中表示正在等待0x0012小数位
+    PRESSURE_TASK_WAIT_ZERO      // 本项目中表示正在等待清零线圈回显
+} PressureTaskState_t; // 本项目中记录稳定main的压力读取、换算和清零阶段
 
 typedef struct
 {
-    uint16 lower_limit;
-    uint16 upper_limit;
-    uint8 lower_enabled;
-    uint8 upper_enabled;
-} PressureLimitConfig_t;
+    uint16 lower_limit;  // 本项目中保存该组Y输出使用的整数压力下限
+    uint16 upper_limit;  // 本项目中保存该组Y输出使用的整数压力上限
+    uint8 lower_enabled; // 本项目中标记该组下限是否已经设置
+    uint8 upper_enabled; // 本项目中标记该组上限是否已经设置
+} PressureLimitConfig_t; // 本项目中保存Y1至Y4各自的RAM压力限值
 
-static PressureTaskState_t g_pressure_task_state;
-static ProjectAsyncResult_t g_pressure_result_state;
-static uint8 g_pressure_slave;
-static int16 g_pressure_raw_value;
-static float g_pressure_result_value;
-static PressureLimitConfig_t xdata g_pressure_limit[PRESSURE_LIMIT_CHANNEL_COUNT];
-static uint8 g_pressure_compare_channel;
-static bit g_pressure_compare_enabled;
+static PressureTaskState_t g_pressure_task_state; // 记录当前压力命令执行阶段
+static ProjectAsyncResult_t g_pressure_result_state; // 保存等待统一控制层取走的压力结果
+static uint8 g_pressure_slave; // 记录当前工作值2指定的Modbus地址
+static int16 g_pressure_raw_value; // 暂存LZ808-H返回的有符号压力原始值
+static float g_pressure_result_value; // 保存换算后返回ICT的压力Float值
+static PressureLimitConfig_t xdata g_pressure_limit[PRESSURE_LIMIT_CHANNEL_COUNT]; // 保存Y1至Y4压力限值
+static uint8 g_pressure_compare_channel; // 0表示普通读取，1至4表示读取后更新对应Y通道
 
 /**
  * @brief  完成当前压力命令
@@ -39,35 +38,35 @@ static bit g_pressure_compare_enabled;
  */
 static void PressureControl_Finish(ProjectAsyncResult_t result, float value)
 {
+    // 本项目中该函数结束稳定压力状态机并保存等待上层取走的结果
     g_pressure_task_state = PRESSURE_TASK_IDLE; // 停止后续状态轮询
     g_pressure_result_state = result;           // 保留结果等待上层消费
     g_pressure_result_value = value;
     g_pressure_compare_channel = 0u;
-    g_pressure_compare_enabled = 0;
 }
 
 /**
  * @brief  按仪表小数位缩放压力值
  * @param  raw_value 有符号原始值
- * @param  decimal_places 小数位数0至4
+ * @param  decimal_places 小数位数0至3
  * @param  value 实际压力值存放地址
  * @retval 1：缩放成功；0：小数位非法
  */
 static bit PressureControl_Scale(int16 raw_value, int16 decimal_places, float *value)
 {
+    // 本项目中该函数按仪表小数位把有符号原始值换算成实际压力Float
     if (value == 0)
     {
         return 0;
     }
 
-    // 仪表仅定义0至4位小数，超出范围视为响应内容错误
+    // 仪表手册仅定义0至3位小数，超出范围时不把错误配置换算成压力值
     switch (decimal_places)
     {
         case 0: *value = (float)raw_value; return 1;
         case 1: *value = (float)raw_value / 10.0f; return 1;
         case 2: *value = (float)raw_value / 100.0f; return 1;
         case 3: *value = (float)raw_value / 1000.0f; return 1;
-        case 4: *value = (float)raw_value / 10000.0f; return 1;
         default: return 0;
     }
 }
@@ -80,6 +79,7 @@ static bit PressureControl_Scale(int16 raw_value, int16 decimal_places, float *v
  */
 static void PressureControl_UpdateTrigger(uint8 channel, float actual_value)
 {
+    // 本项目中该函数按压力绝对值和对应限值更新Y1至Y4中的指定一路
     uint8 index;
     uint8 active;
     float comparison_value;
@@ -114,6 +114,7 @@ static void PressureControl_UpdateTrigger(uint8 channel, float actual_value)
  */
 static bit PressureControl_StartReadTask(uint8 slave, uint8 compare_channel)
 {
+    // 本项目中该函数保存压力地址和比较通道，并启动读取0x0000的第一帧事务
     if ((slave < MODBUS_SLAVE_ADDRESS_MIN) ||
         (slave > MODBUS_SLAVE_ADDRESS_MAX) || PressureControl_IsBusy())
     {
@@ -127,7 +128,6 @@ static bit PressureControl_StartReadTask(uint8 slave, uint8 compare_channel)
 
     g_pressure_slave = slave;
     g_pressure_compare_channel = compare_channel;
-    g_pressure_compare_enabled = (compare_channel != 0u) ? 1 : 0;
     g_pressure_task_state = PRESSURE_TASK_WAIT_VALUE; // 第一帧读取原始压力
     return 1;
 }
@@ -143,6 +143,7 @@ static bit PressureControl_StartReadTask(uint8 slave, uint8 compare_channel)
  */
 void PressureControl_Init(void)
 {
+    // 本项目中该函数初始化稳定压力链路、四组RAM限值和Y1至Y4输出
     uint8 index;
 
     PressureMeter_Init();
@@ -153,7 +154,6 @@ void PressureControl_Init(void)
     g_pressure_raw_value = 0;
     g_pressure_result_value = 0.0f;
     g_pressure_compare_channel = 0u;
-    g_pressure_compare_enabled = 0;
 
     // 上电只清除RAM限值和Y输出，不向任何压力仪表写配置
     for (index = 0u; index < PRESSURE_LIMIT_CHANNEL_COUNT; index++)
@@ -173,6 +173,7 @@ void PressureControl_Init(void)
  */
 bit PressureControl_SetLowerLimit(uint8 channel, uint16 limit_value)
 {
+    // 本项目中该函数校验并保存指定Y通道下限，不向压力仪表写入配置
     uint8 index;
 
     if ((channel < 1u) || (channel > PRESSURE_LIMIT_CHANNEL_COUNT) ||
@@ -203,6 +204,7 @@ bit PressureControl_SetLowerLimit(uint8 channel, uint16 limit_value)
  */
 bit PressureControl_SetUpperLimit(uint8 channel, uint16 limit_value)
 {
+    // 本项目中该函数校验并保存指定Y通道上限，不覆盖有效下限关系
     uint8 index;
 
     if ((channel < 1u) || (channel > PRESSURE_LIMIT_CHANNEL_COUNT) ||
@@ -232,6 +234,7 @@ bit PressureControl_SetUpperLimit(uint8 channel, uint16 limit_value)
  */
 bit PressureControl_StartRead(uint8 slave)
 {
+    // 本项目中该函数启动普通压力读取，完成后不改变任何Y输出
     return PressureControl_StartReadTask(slave, 0u);
 }
 
@@ -243,6 +246,7 @@ bit PressureControl_StartRead(uint8 slave)
  */
 bit PressureControl_StartCompareRead(uint8 channel, uint8 slave)
 {
+    // 本项目中该函数启动压力读取，并在成功后更新指定Y输出
     if ((channel < 1u) || (channel > PRESSURE_LIMIT_CHANNEL_COUNT))
     {
         return 0;
@@ -258,6 +262,7 @@ bit PressureControl_StartCompareRead(uint8 channel, uint8 slave)
  */
 bit PressureControl_StartZero(uint8 slave)
 {
+    // 本项目中该函数向指定LZ808-H发送稳定main的清零线圈请求
     // 地址越界或旧结果未消费时不访问RS485总线
     if ((slave < MODBUS_SLAVE_ADDRESS_MIN) ||
         (slave > MODBUS_SLAVE_ADDRESS_MAX) || PressureControl_IsBusy())
@@ -271,7 +276,6 @@ bit PressureControl_StartZero(uint8 slave)
 
     g_pressure_slave = slave;
     g_pressure_compare_channel = 0u;
-    g_pressure_compare_enabled = 0;
     g_pressure_task_state = PRESSURE_TASK_WAIT_ZERO; // 等待写线圈回显
     return 1;
 }
@@ -283,6 +287,7 @@ bit PressureControl_StartZero(uint8 slave)
  */
 void PressureControl_Poll(void)
 {
+    // 本项目中该函数分两帧读取压力值和小数位，或等待清零回显完成
     int16 meter_value;
     float scaled_value;
     PressureMeterResult_t result;
@@ -326,7 +331,7 @@ void PressureControl_Poll(void)
             return;
         }
 
-        if (g_pressure_compare_enabled)
+        if (g_pressure_compare_channel != 0u)
         {
             PressureControl_UpdateTrigger(g_pressure_compare_channel, scaled_value);
         }
@@ -346,6 +351,7 @@ void PressureControl_Poll(void)
  */
 ProjectAsyncResult_t PressureControl_TakeResult(float *value)
 {
+    // 本项目中该函数向统一控制层交付一次压力结果并清除待取状态
     ProjectAsyncResult_t result;
 
     if (g_pressure_result_state == PROJECT_ASYNC_RESULT_NONE)
@@ -374,6 +380,7 @@ ProjectAsyncResult_t PressureControl_TakeResult(float *value)
  */
 bit PressureControl_IsBusy(void)
 {
+    // 本项目中该函数判断压力任务是否仍在运行或有结果等待取走
     return ((g_pressure_task_state != PRESSURE_TASK_IDLE) ||
             (g_pressure_result_state != PROJECT_ASYNC_RESULT_NONE));
 }

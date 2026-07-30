@@ -17,6 +17,7 @@
  */
 bit Sys_Init(void)
 {
+    // 本项目中该函数保存外部晶振状态，并按稳定main的顺序初始化其余系统资源
     bit clock_ready;
 
     clock_ready = XtalSelect_Init();

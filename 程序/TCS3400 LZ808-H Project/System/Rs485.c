@@ -6,10 +6,10 @@
  内部定义
  *============================================================================*/
 
-#define RS485_RECEIVE_LEVEL   0
-#define RS485_TRANSMIT_LEVEL  1
+#define RS485_RECEIVE_LEVEL   0 // 本项目将P0.7拉低，使压力RS485收发器进入接收模式
+#define RS485_TRANSMIT_LEVEL  1 // 本项目将P0.7拉高，使压力RS485收发器进入发送模式
 
-/* SN65HVD72 /RE与DE并接且有外部上拉：低电平接收，高电平发送。 */
+// 本项目SN65HVD72的/RE与DE并接到P0.7，低电平接收压力响应，高电平发送请求
 sbit RS485_RE_DE_PIN = P0 ^ 7;
 
 /**
@@ -19,6 +19,7 @@ sbit RS485_RE_DE_PIN = P0 ^ 7;
  */
 static void Rs485_TurnaroundDelay(void)
 {
+    // 本项目中该函数按稳定main保留16次空操作，保护SN65HVD72收发方向切换
     uint8 count;
 
     for (count = 0u; count < 16u; count++)
@@ -38,6 +39,7 @@ static void Rs485_TurnaroundDelay(void)
  */
 void Rs485_Init(void)
 {
+    // 本项目中该函数让压力RS485总线上电进入接收状态并清空旧UART2数据
     RS485_RE_DE_PIN = RS485_RECEIVE_LEVEL; // 空闲时关闭驱动并开启接收
     Uart2_ClearRx();
 }
@@ -50,6 +52,7 @@ void Rs485_Init(void)
  */
 bit Rs485_SendBuffer(const uint8 *buffer, uint8 length)
 {
+    // 本项目中该函数按稳定main完成接收转发送、整帧发送和发送转接收
     bit result;
 
     if ((buffer == 0) || (length == 0u))
@@ -73,6 +76,7 @@ bit Rs485_SendBuffer(const uint8 *buffer, uint8 length)
  */
 bit Rs485_ReadByte(uint8 *dat)
 {
+    // 本项目中该函数向Modbus层非阻塞提供一个LZ808-H响应字节
     return Uart2_ReadByte(dat);
 }
 
@@ -83,6 +87,7 @@ bit Rs485_ReadByte(uint8 *dat)
  */
 void Rs485_ClearRx(void)
 {
+    // 本项目中该函数清空UART2旧压力响应，重新建立下一帧接收边界
     Uart2_ClearRx();
 }
 
@@ -93,5 +98,6 @@ void Rs485_ClearRx(void)
  */
 bit Rs485_TakeRxOverflow(void)
 {
+    // 本项目中该函数向Modbus层报告并清除压力响应缓冲溢出状态
     return Uart2_TakeRxOverflow();
 }

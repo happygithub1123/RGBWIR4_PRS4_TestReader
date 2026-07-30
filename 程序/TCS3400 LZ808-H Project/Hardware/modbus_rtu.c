@@ -6,26 +6,28 @@
  内部定义
  *============================================================================*/
 
-#define MODBUS_FUNCTION_READ_HOLDING       0x03u
-#define MODBUS_FUNCTION_WRITE_SINGLE_COIL  0x05u
-#define MODBUS_REQUEST_LENGTH              8u
-#define MODBUS_RESPONSE_MAX_LENGTH         16u
+#define MODBUS_FUNCTION_READ_HOLDING       0x03u // 本项目读取压力值和小数位寄存器的功能码
+#define MODBUS_FUNCTION_WRITE_SINGLE_COIL  0x05u // 本项目执行压力仪表清零的功能码
+#define MODBUS_REQUEST_LENGTH              8u    // 本项目压力读取和清零请求的固定帧长
+#define MODBUS_RESPONSE_MAX_LENGTH         16u   // 本项目稳定main接收动态响应使用的最大缓冲长度
 
 typedef enum
 {
-    MODBUS_STATE_IDLE = 0,
-    MODBUS_STATE_WAITING,
-    MODBUS_STATE_SUCCESS,
-    MODBUS_STATE_ERROR
-} ModbusState_t;
+    MODBUS_STATE_IDLE = 0, // 本项目中表示当前没有压力Modbus事务
+    MODBUS_STATE_WAITING,  // 本项目中表示请求已发送并正在等待仪表响应
+    MODBUS_STATE_SUCCESS,  // 本项目中表示响应已通过地址、功能码和CRC校验
+    MODBUS_STATE_ERROR     // 本项目中表示当前压力事务通信或格式异常
+} ModbusState_t; // 本项目中记录稳定main的Modbus接收和结果阶段
 
-static ModbusState_t g_modbus_state;
-static uint8 g_modbus_expected_slave;
-static uint8 g_modbus_expected_function;
-static uint8 g_modbus_expected_length;
-static uint8 g_modbus_response_length;
-static uint8 xdata g_modbus_response[MODBUS_RESPONSE_MAX_LENGTH];
-static uint32 g_modbus_start_ms;
+static ModbusState_t g_modbus_state;                              // 记录当前压力Modbus事务状态
+static uint8 g_modbus_expected_slave;                             // 保存当前请求期望的仪表地址
+static uint8 g_modbus_expected_function;                          // 保存当前请求期望的功能码
+static uint8 g_modbus_expected_length;                            // 保存按响应头计算出的完整帧长
+static uint8 g_modbus_response_length;                            // 记录当前已经收到的响应字节数
+static uint8 xdata g_modbus_response[MODBUS_RESPONSE_MAX_LENGTH]; // 缓存稳定main的完整Modbus响应
+static uint32 g_modbus_start_ms;                                  // 记录当前压力响应超时起点
+
+static uint16 ModbusRtu_CalcCrc(const uint8 *buffer, uint8 length); // 计算本模块请求和响应使用的Modbus CRC16
 
 /**
  * @brief  启动一帧Modbus请求
@@ -36,6 +38,7 @@ static uint32 g_modbus_start_ms;
  */
 static bit ModbusRtu_StartRequest(uint8 *request, uint8 slave, uint8 function)
 {
+    // 本项目中该函数补齐请求CRC、保存预期响应身份并按稳定main发送一次请求
     uint16 crc;
 
     if (g_modbus_state != MODBUS_STATE_IDLE)
@@ -71,6 +74,7 @@ static bit ModbusRtu_StartRequest(uint8 *request, uint8 slave, uint8 function)
  */
 static void ModbusRtu_ValidateResponse(void)
 {
+    // 本项目中该函数对收齐的压力响应执行CRC、从机地址和功能码校验
     uint16 received_crc;
     uint16 calculated_crc;
 
@@ -99,6 +103,7 @@ static void ModbusRtu_ValidateResponse(void)
  */
 static void ModbusRtu_UpdateExpectedLength(void)
 {
+    // 本项目中该函数根据功能码和字节数动态确定稳定main的完整响应长度
     uint8 function;
 
     if (g_modbus_response_length < 2u)
@@ -145,6 +150,7 @@ static void ModbusRtu_UpdateExpectedLength(void)
  */
 void ModbusRtu_Init(void)
 {
+    // 本项目中该函数建立压力Modbus主机上电空闲状态
     g_modbus_state = MODBUS_STATE_IDLE;
     g_modbus_response_length = 0u;
     g_modbus_expected_length = 0u;
@@ -159,6 +165,7 @@ void ModbusRtu_Init(void)
  */
 bit ModbusRtu_StartReadHolding(uint8 slave, uint16 address, uint16 count)
 {
+    // 本项目中该函数按稳定main构造读取压力保持寄存器的8字节请求
     uint8 request[MODBUS_REQUEST_LENGTH];
 
     if ((slave < MODBUS_SLAVE_ADDRESS_MIN) ||
@@ -186,6 +193,7 @@ bit ModbusRtu_StartReadHolding(uint8 slave, uint16 address, uint16 count)
  */
 bit ModbusRtu_StartWriteSingleCoil(uint8 slave, uint16 address, uint16 value)
 {
+    // 本项目中该函数按稳定main构造压力清零使用的写单线圈请求
     uint8 request[MODBUS_REQUEST_LENGTH];
 
     if ((slave < MODBUS_SLAVE_ADDRESS_MIN) ||
@@ -212,6 +220,7 @@ bit ModbusRtu_StartWriteSingleCoil(uint8 slave, uint16 address, uint16 value)
  */
 void ModbusRtu_Poll(void)
 {
+    // 本项目中该函数非阻塞接收压力响应，并按动态长度立即校验或等待200ms超时
     uint8 dat;
 
     if (g_modbus_state != MODBUS_STATE_WAITING)
@@ -277,17 +286,21 @@ void ModbusRtu_Poll(void)
  */
 bit ModbusRtu_IsBusy(void)
 {
+    // 本项目中该函数只在等待LZ808-H响应期间报告Modbus事务忙
     return (g_modbus_state == MODBUS_STATE_WAITING);
 }
 
 /**
  * @brief  获取并消费Modbus响应结果
  * @param  buffer 响应缓冲区
+ * @param  buffer_size 响应缓冲区容量
  * @param  length 响应长度存放地址
  * @retval 当前响应结果
  */
-ModbusRtuResult_t ModbusRtu_TakeResponse(uint8 *buffer, uint8 *length)
+ModbusRtuResult_t ModbusRtu_TakeResponse(uint8 *buffer, uint8 buffer_size,
+                                         uint8 *length)
 {
+    // 本项目中该函数把完整校验后的响应交给压力仪表层，并消费一次结果
     uint8 index;
 
     // 错误状态消费后立即回到空闲，下一请求可以重新开始
@@ -301,9 +314,12 @@ ModbusRtuResult_t ModbusRtu_TakeResponse(uint8 *buffer, uint8 *length)
     {
         return MODBUS_RTU_RESULT_NONE;
     }
-    if ((buffer == 0) || (length == 0))
+    // 调用方容量不足时禁止复制，避免以后调整响应长度后写出局部数组
+    if ((buffer == 0) || (length == 0) ||
+        (buffer_size < g_modbus_response_length))
     {
         g_modbus_state = MODBUS_STATE_IDLE;
+        g_modbus_response_length = 0u;
         return MODBUS_RTU_RESULT_ERROR;
     }
 
@@ -325,8 +341,9 @@ ModbusRtuResult_t ModbusRtu_TakeResponse(uint8 *buffer, uint8 *length)
  * @param  length 输入长度
  * @retval CRC16结果
  */
-uint16 ModbusRtu_CalcCrc(const uint8 *buffer, uint8 length)
+static uint16 ModbusRtu_CalcCrc(const uint8 *buffer, uint8 length)
 {
+    // 本项目中该函数按Modbus RTU标准为压力请求和响应计算CRC16
     uint8 byte_index;
     uint8 bit_index;
     uint16 crc;
