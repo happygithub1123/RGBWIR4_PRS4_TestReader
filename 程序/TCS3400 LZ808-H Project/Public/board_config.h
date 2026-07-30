@@ -12,6 +12,7 @@
 
 #define TCS3400_FRAME_MARGIN_MS           10u
 #define TCS3400_DATA_POLL_INTERVAL_MS     2u
+#define TCS3400_READ_MAX_ATTEMPTS         2u
 
 #define MODBUS_RESPONSE_TIMEOUT_MS        50u
 #define MODBUS_RETRY_DELAY_MS             2u

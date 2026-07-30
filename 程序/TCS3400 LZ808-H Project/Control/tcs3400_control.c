@@ -28,6 +28,7 @@ static ProjectAsyncResult_t g_tcs_result_state;                   // 等待上�
 static uint8 g_tcs_task_sensor;                                   // 当前任务对应的传感器数组下标
 static Tcs3400Channel_t g_tcs_task_channel;                       // 当前任务只读取的目标通道
 static bit g_tcs_task_ir;                                         // 当前任务是否启用了IR到Clear的数据映射
+static uint8 g_tcs_read_attempt;                                  // 当前读取命令已经开始的采样次数
 static float g_tcs_result_value;                                  // 当前命令的正常浮点返回值
 static uint32 g_tcs_task_start_ms;                                // 当前积分等待的起始时刻
 static uint32 g_tcs_last_poll_ms;                                 // 上一次查询AVALID的时刻
@@ -118,6 +119,7 @@ static void Tcs3400Control_Finish(ProjectAsyncResult_t result, float value)
 {
     g_tcs_task_state = TCS_TASK_IDLE;
     g_tcs_task_ir = 0;
+    g_tcs_read_attempt = 0u;
     g_tcs_result_value = value;
     g_tcs_result_state = result;
 }
@@ -182,7 +184,70 @@ static bit Tcs3400Control_EnsureInitialized(uint8 sensor_index)
 }
 
 /**
- * @brief  启动普通颜色通道的新一帧积分
+ * @brief  按当前任务配置启动一次新的通道积分
+ * @param  无
+ * @retval 1：启动成功；0：映射或积分启动失败
+ */
+static bit Tcs3400Control_BeginReadAttempt(void)
+{
+    SoftI2C_Bus_t bus;
+
+    bus = Tcs3400Control_GetBus(g_tcs_task_sensor);
+    g_tcs_task_state = TCS_TASK_WAIT_DATA;
+
+    // 每次尝试都重新确认映射状态，再丢弃旧帧并启动一次新积分
+    if (!TCS3400_SetIRMap(bus, g_tcs_task_ir) ||
+        !TCS3400_RestartIntegration(bus))
+    {
+        return 0;
+    }
+
+    g_tcs_task_start_ms = Timer0_GetMs();
+    g_tcs_last_poll_ms = g_tcs_task_start_ms;
+    return 1;
+}
+
+/**
+ * @brief  处理读取失败并最多重新初始化重试一次
+ * @param  无
+ * @retval 无
+ */
+static void Tcs3400Control_ReadFailed(void)
+{
+    SoftI2C_Bus_t bus;
+
+    bus = Tcs3400Control_GetBus(g_tcs_task_sensor);
+
+    // IR失败时先尽力恢复普通Clear，避免带着映射状态进入重新初始化
+    if (g_tcs_task_ir && (g_tcs_task_state == TCS_TASK_WAIT_DATA))
+    {
+        TCS3400_SetIRMap(bus, 0);
+        TCS3400_RestartIntegration(bus);
+    }
+
+    g_tcs_sensor[g_tcs_task_sensor].ready = 0u;
+    if (g_tcs_read_attempt >= TCS3400_READ_MAX_ATTEMPTS)
+    {
+        Tcs3400Control_Finish(PROJECT_ASYNC_RESULT_ERROR, 0.0f);
+        return;
+    }
+
+    // 第二次尝试前按最后一次成功的ATIME和增益完整重新初始化目标传感器
+    if (!Tcs3400Control_EnsureInitialized(g_tcs_task_sensor))
+    {
+        Tcs3400Control_Finish(PROJECT_ASYNC_RESULT_ERROR, 0.0f);
+        return;
+    }
+
+    g_tcs_read_attempt++;
+    if (!Tcs3400Control_BeginReadAttempt())
+    {
+        Tcs3400Control_Fail(g_tcs_task_sensor);
+    }
+}
+
+/**
+ * @brief  启动普通颜色通道读取
  * @param  sensor_index 传感器数组下标
  * @param  channel 要读取的通道
  * @retval 1：命令已接收
@@ -190,48 +255,38 @@ static bit Tcs3400Control_EnsureInitialized(uint8 sensor_index)
 static bit Tcs3400Control_StartChannel(uint8 sensor_index,
                                        Tcs3400Channel_t channel)
 {
-    SoftI2C_Bus_t bus;
-
-    bus = Tcs3400Control_GetBus(sensor_index);
+    g_tcs_task_sensor = sensor_index;
     g_tcs_task_channel = channel;
     g_tcs_task_ir = 0;
+    g_tcs_read_attempt = 1u;
 
-    // 普通通道先确认IR映射关闭，再丢弃旧帧并启动一次新积分
-    if (!TCS3400_SetIRMap(bus, 0) || !TCS3400_RestartIntegration(bus))
+    if (!Tcs3400Control_EnsureInitialized(sensor_index) ||
+        !Tcs3400Control_BeginReadAttempt())
     {
-        Tcs3400Control_Fail(sensor_index);
-        return 1;
+        Tcs3400Control_ReadFailed();
     }
 
-    g_tcs_task_start_ms = Timer0_GetMs();
-    g_tcs_last_poll_ms = g_tcs_task_start_ms;
-    g_tcs_task_state = TCS_TASK_WAIT_DATA;
     return 1;
 }
 
 /**
- * @brief  启动IR映射后的新一帧积分
+ * @brief  启动IR通道读取
  * @param  sensor_index 传感器数组下标
  * @retval 1：命令已接收
  */
 static bit Tcs3400Control_StartIr(uint8 sensor_index)
 {
-    SoftI2C_Bus_t bus;
-
-    bus = Tcs3400Control_GetBus(sensor_index);
+    g_tcs_task_sensor = sensor_index;
     g_tcs_task_channel = TCS3400_CHANNEL_CLEAR;
     g_tcs_task_ir = 1;
+    g_tcs_read_attempt = 1u;
 
-    // IR映射到Clear数据端口，回读确认后重新启动一次新积分
-    if (!TCS3400_SetIRMap(bus, 1) || !TCS3400_RestartIntegration(bus))
+    if (!Tcs3400Control_EnsureInitialized(sensor_index) ||
+        !Tcs3400Control_BeginReadAttempt())
     {
-        Tcs3400Control_Fail(sensor_index);
-        return 1;
+        Tcs3400Control_ReadFailed();
     }
 
-    g_tcs_task_start_ms = Timer0_GetMs();
-    g_tcs_last_poll_ms = g_tcs_task_start_ms;
-    g_tcs_task_state = TCS_TASK_WAIT_DATA;
     return 1;
 }
 
@@ -253,6 +308,7 @@ void Tcs3400Control_Init(void)
     g_tcs_result_state = PROJECT_ASYNC_RESULT_NONE;
     g_tcs_task_sensor = TCS3400_SENSOR_COUNT;
     g_tcs_task_ir = 0;
+    g_tcs_read_attempt = 0u;
 
     // 四路先装载27.8ms、4x默认值，再逐路写入真实寄存器
     for (index = 0u; index < TCS3400_SENSOR_COUNT; index++)
@@ -330,11 +386,6 @@ bit Tcs3400Control_Start(uint8 target_code, uint8 function_code, uint16 paramete
         if (parameter != 0u)
         {
             return 0;
-        }
-        if (!Tcs3400Control_EnsureInitialized(sensor_index))
-        {
-            Tcs3400Control_Finish(PROJECT_ASYNC_RESULT_ERROR, 0.0f);
-            return 1;
         }
         if (function_code == 5u)
         {
@@ -432,7 +483,7 @@ void Tcs3400Control_Poll(void)
     }
     if (Timer0_HasElapsed(g_tcs_task_start_ms, sensor_state->frame_wait_ms))
     {
-        Tcs3400Control_Fail(g_tcs_task_sensor);
+        Tcs3400Control_ReadFailed();
         return;
     }
     if (!Timer0_HasElapsed(g_tcs_last_poll_ms,
@@ -445,7 +496,7 @@ void Tcs3400Control_Poll(void)
     bus = Tcs3400Control_GetBus(g_tcs_task_sensor);
     if (!TCS3400_GetDataValid(bus, &valid))
     {
-        Tcs3400Control_Fail(g_tcs_task_sensor);
+        Tcs3400Control_ReadFailed();
         return;
     }
     if (!valid)
@@ -454,7 +505,7 @@ void Tcs3400Control_Poll(void)
     }
     if (!TCS3400_ReadChannel(bus, g_tcs_task_channel, &value))
     {
-        Tcs3400Control_Fail(g_tcs_task_sensor);
+        Tcs3400Control_ReadFailed();
         return;
     }
 
@@ -464,7 +515,7 @@ void Tcs3400Control_Poll(void)
         if (!TCS3400_SetIRMap(bus, 0) ||
             !TCS3400_RestartIntegration(bus))
         {
-            Tcs3400Control_Fail(g_tcs_task_sensor);
+            Tcs3400Control_ReadFailed();
             return;
         }
     }
