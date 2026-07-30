@@ -13,7 +13,7 @@ typedef enum
     SENSOR_SOURCE_PRESSURE
 } SensorSource_t;
 
-static SensorSource_t g_sensor_source;
+static SensorSource_t g_sensor_source; //记录当前占用统一控制器的传感器类型
 
 /*==============================================================================
  对外函数

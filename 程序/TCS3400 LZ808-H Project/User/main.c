@@ -10,27 +10,17 @@
  */
 void main(void)
 {
-    bit system_ready;
+    EA = 0; // 关闭总中断
+    Sys_Init(); // 初始化系统基础资源
+    RunLed_Init(); // 初始化运行指示灯
+    SensorControl_Init(); // 初始化统一传感器控制器
+    AppComm_Init(); // 初始化MTF应用通信状态
 
-    EA = 0; // 所有中断源配置完成前保持总中断关闭
-    system_ready = Sys_Init();
-    RunLed_Init();
-
-    if (system_ready)
-    {
-        SensorControl_Init();
-        AppComm_Init();
-    }
-
-    EA = 1;
-    // 主循环只执行短任务轮询，长等待由毫秒时基和状态机拆分
+    EA = 1; // 开启总中断
+    // 循环轮询各模块
     while (1)
     {
-        RunLed_Poll();
-
-        if (system_ready)
-        {
-            AppComm_Poll();
-        }
+        RunLed_Poll(); // 轮询运行指示灯
+        AppComm_Poll(); // 轮询MTF应用通信
     }
 }

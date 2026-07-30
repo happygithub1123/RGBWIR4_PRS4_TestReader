@@ -6,8 +6,9 @@
  内部定义
  *============================================================================*/
 
-#define RS485_RECEIVE_LEVEL   0
-#define RS485_TRANSMIT_LEVEL  1
+#define RS485_RECEIVE_LEVEL   0 // P0.7拉低，使RS485收发器进入接收模式
+#define RS485_TRANSMIT_LEVEL  1 // P0.7拉高，使RS485收发器进入发送模式
+#define RS485_TURNAROUND_DELAY_COUNT  240u // 按SN65HVD72方向切换最坏约9us留出稳定余量
 
 /* SN65HVD72 /RE与DE并接且有外部上拉：低电平接收，高电平发送。 */
 sbit RS485_RE_DE_PIN = P0 ^ 7;
@@ -21,7 +22,7 @@ static void Rs485_TurnaroundDelay(void)
 {
     uint8 count;
 
-    for (count = 0u; count < 16u; count++)
+    for (count = 0u; count < RS485_TURNAROUND_DELAY_COUNT; count++)
     {
         _nop_();
     }

@@ -13,17 +13,14 @@
 /**
  * @brief  初始化系统基础资源
  * @param  无
- * @retval 1：初始化成功；0：外部晶振启动失败
+ * @retval 无
  */
-bit Sys_Init(void)
+void Sys_Init(void)
 {
-    bit clock_ready;
-
-    clock_ready = XtalSelect_Init();
+    XtalSelect_Init();
     GPIO_Init();
     Uart1_Init();
     Uart2_Init();
     Rs485_Init();
     TM0_Init();
-    return clock_ready;
 }

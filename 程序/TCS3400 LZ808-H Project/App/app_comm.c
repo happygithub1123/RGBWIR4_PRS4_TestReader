@@ -8,10 +8,10 @@
  内部定义
  *============================================================================*/
 
-static uint8 idata g_app_rx_buffer[MTF_REQUEST_FRAME_LENGTH];
-static uint8 g_app_rx_index;
-static bit g_app_request_pending;
-static uint32 g_app_rx_start_ms;
+static uint8 idata g_app_rx_buffer[MTF_REQUEST_FRAME_LENGTH]; //缓存UART1接收的MTF固定长度请求帧
+static uint8 g_app_rx_index;                                  //记录当前请求帧已接收字节数
+static bit g_app_request_pending;                             //标记业务层异步请求正在等待唯一响应
+static uint32 g_app_rx_start_ms;                              //记录当前请求帧首字节接收时间
 
 /**
  * @brief  清除当前不完整请求帧
@@ -21,7 +21,7 @@ static uint32 g_app_rx_start_ms;
 static void AppComm_ResetReceiver(void)
 {
     g_app_rx_index = 0u;       // 丢弃当前未完成帧
-    g_app_rx_start_ms = 0UL;   // 取消本帧接收超时计时
+    g_app_rx_start_ms = 0;     // 取消本帧接收超时计时
 }
 
 /**

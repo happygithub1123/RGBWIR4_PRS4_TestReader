@@ -4,7 +4,7 @@
  内部定义
  *============================================================================*/
 
-static volatile uint32 g_system_ms;
+static volatile uint32 g_system_ms; //保存Timer0中断累加的系统毫秒时基
 
 /*==============================================================================
  对外函数
@@ -17,7 +17,7 @@ static volatile uint32 g_system_ms;
  */
 void TM0_Init(void)
 {
-    g_system_ms = 0UL; // 中断与主循环共享的毫秒时基
+    g_system_ms = 0;   // 中断与主循环共享的毫秒时基
     AUXR |= 0x80u;     // Timer0使用1T模式
     TMOD &= 0xF0u;     // Timer0配置为16位自动重装模式
     TH0 = 0xA9u;       // 22.1184 MHz下1 ms重装高字节

@@ -3,6 +3,6 @@
 
 #include "Public_cfg.h"
 
-bit Sys_Init(void);  /* 初始化系统时钟、GPIO、串口和时基。 */
+void Sys_Init(void);  /* 初始化系统时钟、GPIO、串口和时基。 */
 
 #endif

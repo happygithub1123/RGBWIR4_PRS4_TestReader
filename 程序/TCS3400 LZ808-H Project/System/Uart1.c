@@ -8,34 +8,11 @@
 #define UART1_RX_BUFFER_MASK  0x1Fu
 #define UART1_TX_TIMEOUT      60000u
 
-static volatile uint8 idata g_uart1_rx_buffer[UART1_RX_BUFFER_SIZE];
-static volatile uint8 g_uart1_write_index;
-static volatile uint8 g_uart1_read_index;
-static volatile bit g_uart1_tx_busy;
-static volatile bit g_uart1_rx_overflow;
-
-/**
- * @brief  等待UART1发送完成
- * @param  无
- * @retval 1：发送完成；0：等待超时
- */
-static bit Uart1_WaitTxComplete(void)
-{
-    uint16 timeout;
-
-    timeout = UART1_TX_TIMEOUT;
-    // 有限等待防止发送中断异常时永久阻塞主循环
-    while (g_uart1_tx_busy)
-    {
-        if (--timeout == 0u)
-        {
-            g_uart1_tx_busy = 0;
-            return 0;
-        }
-    }
-
-    return 1;
-}
+static volatile uint8 idata g_uart1_rx_buffer[UART1_RX_BUFFER_SIZE]; //保存UART1中断接收的环形缓冲数据
+static volatile uint8 g_uart1_write_index;                           //记录UART1接收缓冲写入位置
+static volatile uint8 g_uart1_read_index;                            //记录UART1接收缓冲读取位置
+static volatile bit g_uart1_tx_busy;                                 //标记UART1当前是否正在发送字节
+static volatile bit g_uart1_rx_overflow;                             //标记UART1接收环形缓冲发生溢出
 
 /*==============================================================================
  对外函数
@@ -125,9 +102,17 @@ bit Uart1_TakeRxOverflow(void)
  */
 bit Uart1_SendByte(uint8 dat)
 {
-    if (!Uart1_WaitTxComplete())
+    uint16 timeout;
+
+    timeout = UART1_TX_TIMEOUT;
+    // 等上一字节发完后再写SBUF，避免连续发送时覆盖数据
+    while (g_uart1_tx_busy)
     {
-        return 0;
+        if (--timeout == 0u)
+        {
+            g_uart1_tx_busy = 0;
+            return 0;
+        }
     }
 
     g_uart1_tx_busy = 1; // TI中断在硬件发送完成后清除此标志
@@ -144,6 +129,7 @@ bit Uart1_SendByte(uint8 dat)
 bit Uart1_SendBuffer(const uint8 *buffer, uint8 length)
 {
     uint8 index;
+    uint16 timeout;
 
     if ((buffer == 0) || (length == 0u))
     {
@@ -159,7 +145,18 @@ bit Uart1_SendBuffer(const uint8 *buffer, uint8 length)
         }
     }
 
-    return Uart1_WaitTxComplete();
+    timeout = UART1_TX_TIMEOUT;
+    // 等最后一个字节真正发完，保证返回时整帧已经发送结束
+    while (g_uart1_tx_busy)
+    {
+        if (--timeout == 0u)
+        {
+            g_uart1_tx_busy = 0;
+            return 0;
+        }
+    }
+
+    return 1;
 }
 
 /**

@@ -13,9 +13,9 @@
 /**
  * @brief  启动并选择外部晶振
  * @param  无
- * @retval 1：切换成功；0：晶振稳定超时
+ * @retval 无
  */
-bit XtalSelect_Init(void)
+void XtalSelect_Init(void)
 {
     uint16 timeout;
 
@@ -29,14 +29,7 @@ bit XtalSelect_Init(void)
         timeout--;
     }
 
-    if (timeout == 0u)
-    {
-        P_SW2 &= 0x7Fu;
-        return 0;
-    }
-
     CLKDIV = 0x00u;       // 系统时钟不分频
     CLKSEL = 0x01u;       // 系统时钟切换到外部晶振
     P_SW2 &= 0x7Fu;       // 关闭扩展SFR写访问
-    return 1;
 }
