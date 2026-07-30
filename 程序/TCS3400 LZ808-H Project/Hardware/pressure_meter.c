@@ -5,14 +5,14 @@
  内部定义
  *============================================================================*/
 
-#define PRESSURE_VALUE_REGISTER    0x0000u
-#define PRESSURE_DECIMAL_REGISTER  0x0012u
-#define PRESSURE_ZERO_COIL         0x0000u
-#define PRESSURE_ZERO_VALUE        0xFF00u
+#define PRESSURE_VALUE_REGISTER    0x0000u // 本项目读取LZ808-H有符号压力值的寄存器
+#define PRESSURE_DECIMAL_REGISTER  0x0012u // 本项目读取LZ808-H显示小数位的寄存器
+#define PRESSURE_ZERO_COIL         0x0000u // 本项目触发LZ808-H清零的线圈地址
+#define PRESSURE_ZERO_VALUE        0xFF00u // 本项目接通清零线圈使用的固定Modbus值
 
-static PressureMeterOperation_t g_pressure_meter_operation;
-static PressureMeterResult_t g_pressure_meter_result;
-static int16 g_pressure_meter_value;
+static PressureMeterOperation_t g_pressure_meter_operation; // 记录当前压力值、小数位或清零操作
+static PressureMeterResult_t g_pressure_meter_result;       // 保存当前仪表操作等待上层取走的结果
+static int16 g_pressure_meter_value;                         // 保存压力寄存器或小数位的有符号原始值
 
 /*==============================================================================
  对外函数
@@ -25,6 +25,7 @@ static int16 g_pressure_meter_value;
  */
 void PressureMeter_Init(void)
 {
+    // 本项目中该函数初始化稳定main的压力仪表操作层和底层Modbus状态
     ModbusRtu_Init();
     g_pressure_meter_result = PRESSURE_METER_RESULT_NONE;
     g_pressure_meter_value = 0;
@@ -38,6 +39,7 @@ void PressureMeter_Init(void)
  */
 bit PressureMeter_Start(PressureMeterOperation_t operation, uint8 slave)
 {
+    // 本项目中该函数把压力值、小数位或清零操作转换为稳定main的Modbus请求
     bit started;
 
     // 旧结果未消费或Modbus事务未结束时禁止覆盖操作类型
@@ -80,12 +82,13 @@ bit PressureMeter_Start(PressureMeterOperation_t operation, uint8 slave)
  */
 void PressureMeter_Poll(void)
 {
+    // 本项目中该函数取得完整Modbus响应并按当前仪表操作执行二次业务校验
     uint8 frame[16];
     uint8 length;
     ModbusRtuResult_t result;
 
     ModbusRtu_Poll();
-    result = ModbusRtu_TakeResponse(frame, &length);
+    result = ModbusRtu_TakeResponse(frame, (uint8)sizeof(frame), &length);
     if (result == MODBUS_RTU_RESULT_NONE)
     {
         return;
@@ -132,6 +135,7 @@ void PressureMeter_Poll(void)
  */
 PressureMeterResult_t PressureMeter_TakeResult(int16 *value)
 {
+    // 本项目中该函数向压力控制层交付一次仪表结果并清除待取状态
     PressureMeterResult_t result;
 
     if (g_pressure_meter_result == PRESSURE_METER_RESULT_NONE)

@@ -9,34 +9,34 @@
 
 typedef enum
 {
-    TCS_TASK_IDLE = 0,
-    TCS_TASK_WAIT_RGBC,
-    TCS_TASK_WAIT_IR,
-    TCS_TASK_WAIT_CLEAR_RECOVERY
-} TcsTaskState_t;
+    TCS_TASK_IDLE = 0,          // 本项目中表示当前没有TCS3400采样任务
+    TCS_TASK_WAIT_RGBC,         // 本项目中表示正在等待普通R、G、B或Clear积分完成
+    TCS_TASK_WAIT_IR,           // 本项目中表示正在等待IR映射后的积分完成
+    TCS_TASK_WAIT_CLEAR_RECOVERY // 本项目中表示IR读取后正在等待普通Clear恢复完成
+} TcsTaskState_t; // 本项目中记录稳定main的RGBC、IR及Clear恢复采样阶段
 
 typedef struct
 {
-    uint8 atime;
-    uint8 gain_register;
-    uint8 initialized;
-    uint8 communication_ok;
-    uint8 data_valid;
-    uint8 ir_map_enabled;
-    uint8 operation_state;
-    uint16 integration_parameter;
-    uint16 frame_wait_ms;
-} TcsSensorState_t;
+    uint8 atime;                  // 本项目中保存该路最后成功的ATIME寄存器值
+    uint8 gain_register;          // 本项目中保存该路最后成功的增益寄存器值
+    uint8 initialized;            // 本项目中标记该路是否已经完成真实寄存器初始化
+    uint8 communication_ok;       // 本项目中标记该路最近一次I2C通信是否正常
+    uint8 data_valid;             // 本项目中记录当前积分数据是否已经通过AVALID确认
+    uint8 ir_map_enabled;         // 本项目中记录Clear寄存器当前是否映射为IR
+    uint8 operation_state;        // 本项目中保存该路当前执行的稳定采样阶段
+    uint16 integration_parameter; // 本项目中保存工作值2对应的积分时间档位
+    uint16 frame_wait_ms;         // 本项目中保存该积分档允许等待新数据的最长时间
+} TcsSensorState_t; // 本项目中保存四路TCS3400彼此独立的配置和通信状态
 
-static TcsSensorState_t xdata g_tcs_sensor[TCS3400_SENSOR_COUNT];
-static TcsTaskState_t g_tcs_task_state;
-static ProjectAsyncResult_t g_tcs_result_state;
-static uint8 g_tcs_task_sensor;
-static uint8 g_tcs_task_channel;
-static uint16 g_tcs_saved_ir;
-static float g_tcs_result_value;
-static uint32 g_tcs_task_start_ms;
-static uint32 g_tcs_last_poll_ms;
+static TcsSensorState_t xdata g_tcs_sensor[TCS3400_SENSOR_COUNT]; // 保存四路TCS3400的稳定配置和状态
+static TcsTaskState_t g_tcs_task_state;                           // 记录当前环境光任务所处采样阶段
+static ProjectAsyncResult_t g_tcs_result_state;                   // 保存等待上层取走的环境光结果状态
+static uint8 g_tcs_task_sensor;                                   // 记录当前Pin1选择的TCS3400数组下标
+static uint8 g_tcs_task_channel;                                  // 记录当前读取R、G、B、Clear或IR通道
+static uint16 g_tcs_saved_ir;                                     // 暂存IR值直到普通Clear恢复完成
+static float g_tcs_result_value;                                  // 保存最终返回ICT的环境光Float值
+static uint32 g_tcs_task_start_ms;                                // 记录当前积分或恢复阶段的开始时刻
+static uint32 g_tcs_last_poll_ms;                                 // 限制AVALID查询频率的上次轮询时刻
 
 /**
  * @brief  将传感器编号转换为软件I2C总线
@@ -45,6 +45,7 @@ static uint32 g_tcs_last_poll_ms;
  */
 static SoftI2C_Bus_t Tcs3400Control_GetBus(uint8 sensor_index)
 {
+    // 本项目中传感器数组下标与四路软件I2C总线编号一一对应
     return (SoftI2C_Bus_t)sensor_index;
 }
 
@@ -59,6 +60,7 @@ static SoftI2C_Bus_t Tcs3400Control_GetBus(uint8 sensor_index)
 static bit Tcs3400Control_GetIntegrationConfig(uint16 parameter, uint8 *atime,
                                                 uint16 *wait_ms, float *reply_ms)
 {
+    // 本项目中该函数把六档工作值2转换成ATIME、等待时间和Float返回值
     if ((atime == 0) || (wait_ms == 0) || (reply_ms == 0))
     {
         return 0;
@@ -98,6 +100,7 @@ static bit Tcs3400Control_GetIntegrationConfig(uint16 parameter, uint8 *atime,
  */
 static bit Tcs3400Control_GetGainRegister(uint16 parameter, uint8 *gain_register)
 {
+    // 本项目中该函数把1x、4x、16x和64x工作值2转换成CONTROL寄存器值
     if (gain_register == 0)
     {
         return 0;
@@ -122,6 +125,7 @@ static bit Tcs3400Control_GetGainRegister(uint16 parameter, uint8 *gain_register
  */
 static void Tcs3400Control_Finish(ProjectAsyncResult_t result, float value)
 {
+    // 本项目中该函数结束稳定TCS状态机并保存等待统一控制层取走的结果
     if (g_tcs_task_sensor < TCS3400_SENSOR_COUNT)
     {
         g_tcs_sensor[g_tcs_task_sensor].operation_state = TCS_TASK_IDLE;
@@ -138,6 +142,7 @@ static void Tcs3400Control_Finish(ProjectAsyncResult_t result, float value)
  */
 static void Tcs3400Control_Fail(uint8 sensor_index)
 {
+    // 本项目中该函数标记I2C通信异常，并尽力关闭可能残留的IR映射
     SoftI2C_Bus_t bus;
 
     bus = Tcs3400Control_GetBus(sensor_index);
@@ -165,6 +170,7 @@ static void Tcs3400Control_Fail(uint8 sensor_index)
  */
 static bit Tcs3400Control_StartRgbc(uint8 sensor_index, uint8 channel)
 {
+    // 本项目中该函数按稳定main流程关闭IR映射并启动一帧完整RGBC积分
     SoftI2C_Bus_t bus;
 
     bus = Tcs3400Control_GetBus(sensor_index);
@@ -193,6 +199,7 @@ static bit Tcs3400Control_StartRgbc(uint8 sensor_index, uint8 channel)
  */
 static bit Tcs3400Control_StartIr(uint8 sensor_index)
 {
+    // 本项目中该函数开启IR映射并启动IR读取所需的新积分
     SoftI2C_Bus_t bus;
 
     bus = Tcs3400Control_GetBus(sensor_index);
@@ -227,6 +234,7 @@ static bit Tcs3400Control_StartIr(uint8 sensor_index)
  */
 static bit Tcs3400Control_EnsureInitialized(uint8 sensor_index)
 {
+    // 本项目中该函数在命令执行前按最后成功配置确认目标传感器真实可用
     TcsSensorState_t *sensor_state;
 
     if (sensor_index >= TCS3400_SENSOR_COUNT)
@@ -271,6 +279,7 @@ static bit Tcs3400Control_EnsureInitialized(uint8 sensor_index)
  */
 void Tcs3400Control_Init(void)
 {
+    // 本项目中该函数装载27.8ms和4x默认值，并按稳定main逐路初始化四个传感器
     uint8 index;
 
     SoftI2C_Init();
@@ -305,6 +314,7 @@ void Tcs3400Control_Init(void)
  */
 bit Tcs3400Control_Start(uint8 target_code, uint8 function_code, uint16 parameter)
 {
+    // 本项目中该函数校验Pin1和工作值2，并启动设置、RGBC、IR或ID操作
     bit rollback_ok;
     uint8 sensor_index;
     uint8 register_value;
@@ -440,9 +450,10 @@ bit Tcs3400Control_Start(uint8 target_code, uint8 function_code, uint16 paramete
  */
 void Tcs3400Control_Poll(void)
 {
+    // 本项目中该函数等待AVALID、只读取指定普通通道并完成IR后的Clear恢复
     uint8 valid;
     uint16 value;
-    Tcs3400RgbcData_t rgbc;
+    Tcs3400Channel_t channel;
     TcsSensorState_t *sensor_state;
     SoftI2C_Bus_t bus;
 
@@ -480,21 +491,21 @@ void Tcs3400Control_Poll(void)
         return;
     }
 
-    // RGBC在同一有效帧中读取，再按命令选择一个通道返回
+    // 普通命令只读取Pin1指定的一个通道，积分和AVALID流程保持稳定main不变
     if (g_tcs_task_state == TCS_TASK_WAIT_RGBC)
     {
-        if (!TCS3400_ReadRGBC(bus, &rgbc))
+        switch (g_tcs_task_channel)
+        {
+            case 1u: channel = TCS3400_CHANNEL_RED; break;
+            case 2u: channel = TCS3400_CHANNEL_GREEN; break;
+            case 3u: channel = TCS3400_CHANNEL_BLUE; break;
+            default: channel = TCS3400_CHANNEL_CLEAR; break;
+        }
+
+        if (!TCS3400_ReadChannel(bus, channel, &value))
         {
             Tcs3400Control_Fail(g_tcs_task_sensor);
             return;
-        }
-
-        switch (g_tcs_task_channel)
-        {
-            case 1u: value = rgbc.red; break;
-            case 2u: value = rgbc.green; break;
-            case 3u: value = rgbc.blue; break;
-            default: value = rgbc.clear; break;
         }
 
         sensor_state->communication_ok = 1u;
@@ -539,6 +550,7 @@ void Tcs3400Control_Poll(void)
  */
 ProjectAsyncResult_t Tcs3400Control_TakeResult(float *value)
 {
+    // 本项目中该函数向统一控制层交付一次环境光结果并清除待取状态
     ProjectAsyncResult_t result;
 
     if (g_tcs_result_state == PROJECT_ASYNC_RESULT_NONE)
@@ -568,6 +580,7 @@ ProjectAsyncResult_t Tcs3400Control_TakeResult(float *value)
  */
 bit Tcs3400Control_IsBusy(void)
 {
+    // 本项目中该函数判断TCS3400任务是否仍在采样或有结果等待取走
     return ((g_tcs_task_state != TCS_TASK_IDLE) ||
             (g_tcs_result_state != PROJECT_ASYNC_RESULT_NONE));
 }
