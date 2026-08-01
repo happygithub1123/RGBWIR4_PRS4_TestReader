@@ -1,0 +1,3458 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>RGBWIR4_PRS4 V1.3 操作帮助</title>
+  <style>
+    :root {
+      --bg: #f5f5f7;
+      --surface: #ffffff;
+      --surface-alt: #f5f5f7;
+      --ink: #1d1d1f;
+      --muted: #6e6e73;
+      --line: #d2d2d7;
+      --teal: #0071e3;
+      --teal-dark: #0066cc;
+      --amber: #a85400;
+      --amber-bg: #fff7ed;
+      --red: #d70015;
+      --red-bg: #fff2f3;
+      --green-bg: #f2f8f5;
+      --focus: #0071e3;
+      --shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
+      --radius: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
+        "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+      letter-spacing: 0;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+      letter-spacing: 0;
+    }
+
+    button,
+    select,
+    input {
+      min-height: 40px;
+    }
+
+    button:focus-visible,
+    select:focus-visible,
+    input:focus-visible,
+    a:focus-visible {
+      outline: 3px solid rgba(18, 94, 169, 0.28);
+      outline-offset: 2px;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 2px solid #17b8a6;
+      background: #111e27;
+      color: #ffffff;
+    }
+
+    .topbar-inner {
+      width: min(1180px, calc(100% - 32px));
+      min-height: 64px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .brand {
+      min-width: 0;
+    }
+
+    .brand strong {
+      display: block;
+      font-size: 20px;
+      line-height: 1.3;
+    }
+
+    .brand span {
+      display: block;
+      color: #8fded5;
+      font-size: 12px;
+    }
+
+    .topnav {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      white-space: nowrap;
+    }
+
+    .topnav a {
+      color: #e7f0f3;
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    .topnav a:hover {
+      color: #72d5c9;
+    }
+
+    .system-state {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: #b9cbd2;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 11px;
+    }
+
+    .system-state::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #38d39f;
+      box-shadow: 0 0 0 3px rgba(56, 211, 159, 0.14);
+    }
+
+    main {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 56px;
+    }
+
+    .page-intro {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 330px;
+      gap: 28px;
+      align-items: start;
+      margin-bottom: 24px;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      font-size: 30px;
+    }
+
+    h2 {
+      font-size: 23px;
+      margin-bottom: 8px;
+    }
+
+    h3 {
+      font-size: 17px;
+      margin-bottom: 8px;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    .lead {
+      max-width: 760px;
+      color: var(--muted);
+      font-size: 16px;
+    }
+
+    .document-credit {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 10px 0 4px;
+      color: #087f73;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .document-credit span {
+      border: 1px solid #69bcb2;
+      background: #e3f7f4;
+      padding: 2px 7px;
+      color: #07665e;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 11px;
+    }
+
+    .version-note {
+      border-left: 4px solid var(--teal);
+      background: var(--green-bg);
+      padding: 14px 16px;
+    }
+
+    .version-note strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .section {
+      scroll-margin-top: 82px;
+      margin-top: 34px;
+      padding-top: 30px;
+      border-top: 1px solid var(--line);
+    }
+
+    .section-heading {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: end;
+      margin-bottom: 18px;
+    }
+
+    .section-heading p {
+      max-width: 680px;
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .tool-shell {
+      overflow: hidden;
+      border: 1px solid #285766;
+      border-radius: var(--radius);
+      background: #0c1c25;
+      box-shadow: 0 12px 30px rgba(12, 28, 37, 0.18);
+    }
+
+    .mode-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border-bottom: 1px solid #285766;
+      background: #132b36;
+    }
+
+    .mode-tab {
+      border: 0;
+      border-right: 1px solid #285766;
+      background: transparent;
+      color: #9bb2bc;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    .mode-tab:last-child {
+      border-right: 0;
+    }
+
+    .mode-tab[aria-selected="true"] {
+      background: #0c1c25;
+      color: #55e1d0;
+      box-shadow: inset 0 -3px 0 #17b8a6;
+    }
+
+    .console-status {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 7px 14px;
+      border-bottom: 1px solid #285766;
+      background: #09171f;
+      color: #8fb2bd;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 11px;
+    }
+
+    .console-status strong {
+      color: #43d5c3;
+      font-weight: 700;
+    }
+
+    .tool-body {
+      display: grid;
+      grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.3fr);
+      min-height: 390px;
+    }
+
+    .tool-controls,
+    .tool-output {
+      padding: 24px;
+    }
+
+    .tool-controls {
+      border-right: 1px solid #285766;
+      background: #102630;
+      color: #eef8fa;
+    }
+
+    .tool-output {
+      background: #0c1c25;
+      color: #eef8fa;
+    }
+
+    .tool-shell .field label,
+    .tool-shell .result-field label {
+      color: #a9c1ca;
+    }
+
+    .tool-shell .field select,
+    .tool-shell .field input {
+      border-color: #426976;
+      background: #f5fafb;
+    }
+
+    .tool-shell .field-help {
+      color: #91abb5;
+    }
+
+    .control-grid {
+      display: grid;
+      gap: 15px;
+    }
+
+    .field label,
+    .result-field label {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .field select,
+    .field input,
+    .result-field input {
+      width: 100%;
+      border: 1px solid #9eabb3;
+      border-radius: 4px;
+      background: #ffffff;
+      color: var(--ink);
+      padding: 8px 10px;
+    }
+
+    .field-help {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    .tool-output h3 {
+      margin-bottom: 14px;
+    }
+
+    .result-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .result-field {
+      min-width: 0;
+    }
+
+    .result-input-wrap {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 40px;
+    }
+
+    .result-field input {
+      min-width: 0;
+      border-radius: 4px 0 0 4px;
+      border-color: #426976;
+      background: #071820;
+      color: #5ff0de;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 23px;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .result-field input[readonly] {
+      background: #071820;
+    }
+
+    .icon-button {
+      width: 40px;
+      min-width: 40px;
+      border: 1px solid #9eabb3;
+      border-left: 0;
+      border-radius: 0 4px 4px 0;
+      background: #12313b;
+      color: #5ff0de;
+      cursor: pointer;
+      font-size: 17px;
+    }
+
+    .icon-button:hover {
+      background: #19434e;
+    }
+
+    .copy-all {
+      margin-top: 14px;
+      border: 1px solid var(--teal);
+      border-radius: 4px;
+      background: var(--teal);
+      color: #ffffff;
+      cursor: pointer;
+      padding: 8px 14px;
+      font-weight: 700;
+    }
+
+    .copy-all:hover {
+      background: var(--teal-dark);
+    }
+
+    .command-explain {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+      padding-top: 16px;
+      border-top: 1px solid #285766;
+    }
+
+    .explain-item {
+      min-width: 0;
+    }
+
+    .explain-item span {
+      display: block;
+      color: #8faab4;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .explain-item strong {
+      display: block;
+      overflow-wrap: anywhere;
+    }
+
+    .tool-message {
+      min-height: 26px;
+      margin-top: 14px;
+      color: #5ff0de;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .tool-message.error {
+      color: var(--red);
+    }
+
+    .notice {
+      margin: 18px 0;
+      border-left: 4px solid var(--amber);
+      background: var(--amber-bg);
+      padding: 12px 16px;
+    }
+
+    .notice.error {
+      border-left-color: var(--red);
+      background: var(--red-bg);
+    }
+
+    .default-band {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      border: 1px solid var(--line);
+      background: var(--surface);
+    }
+
+    .default-item {
+      padding: 16px;
+      border-right: 1px solid var(--line);
+    }
+
+    .default-item:last-child {
+      border-right: 0;
+    }
+
+    .default-item span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .default-item strong {
+      display: block;
+      margin-top: 2px;
+      font-size: 20px;
+    }
+
+    .two-column {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-top: 24px;
+    }
+
+    .plain-panel {
+      min-width: 0;
+      border-top: 3px solid var(--teal);
+      background: var(--surface);
+      padding: 18px;
+    }
+
+    .plain-panel.amber {
+      border-top-color: var(--amber);
+    }
+
+    .plain-panel ul {
+      margin: 8px 0 0;
+      padding-left: 20px;
+    }
+
+    .calculator {
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr);
+      gap: 0;
+      margin-top: 20px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .calculator-controls {
+      padding: 20px;
+      border-right: 1px solid var(--line);
+      background: #f7f9fa;
+    }
+
+    .calculator-results {
+      padding: 20px;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .metric {
+      min-height: 86px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 11px;
+      background: #ffffff;
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 3px;
+      font-size: 18px;
+      overflow-wrap: anywhere;
+    }
+
+    .sensitivity {
+      margin-top: 16px;
+    }
+
+    .sensitivity-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .meter {
+      height: 12px;
+      margin-top: 7px;
+      overflow: hidden;
+      border: 1px solid #9eabb3;
+      background: #e3e9ec;
+    }
+
+    .meter-fill {
+      width: 0;
+      height: 100%;
+      background: var(--teal);
+      transition: width 180ms ease;
+    }
+
+    .formula {
+      margin-top: 14px;
+      padding: 10px 12px;
+      background: var(--surface-alt);
+      font-family: Consolas, "Microsoft YaHei", monospace;
+      font-size: 13px;
+      overflow-wrap: anywhere;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      margin-top: 16px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 720px;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th:last-child,
+    td:last-child {
+      border-right: 0;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: 0;
+    }
+
+    th {
+      background: #e7edef;
+      color: #263641;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    tbody tr:nth-child(even) {
+      background: #fafcfc;
+    }
+
+    code,
+    .numeric {
+      font-family: Consolas, "Courier New", monospace;
+      font-weight: 700;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin: 18px 0;
+      padding: 0;
+      list-style: none;
+      counter-reset: step;
+    }
+
+    .steps li {
+      position: relative;
+      min-height: 122px;
+      border-top: 3px solid var(--teal);
+      background: var(--surface);
+      padding: 14px 14px 14px 48px;
+      counter-increment: step;
+    }
+
+    .steps li::before {
+      content: counter(step);
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--teal);
+      color: #ffffff;
+      line-height: 24px;
+      text-align: center;
+      font-weight: 700;
+    }
+
+    .steps strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .pressure-prereq {
+      margin: 18px 0 14px;
+      border-left: 4px solid var(--teal);
+      background: var(--surface-alt);
+      padding: 12px 16px;
+    }
+
+    .pressure-groups {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.25fr);
+      gap: 14px;
+    }
+
+    .pressure-group {
+      border-top: 4px solid var(--teal);
+      background: var(--surface);
+      padding: 17px;
+    }
+
+    .pressure-group.compare {
+      border-top-color: var(--amber);
+    }
+
+    .pressure-group-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .pressure-group-title span {
+      display: grid;
+      width: 26px;
+      height: 26px;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--teal);
+      color: #ffffff;
+      font-weight: 700;
+    }
+
+    .pressure-group.compare .pressure-group-title span {
+      background: var(--amber);
+    }
+
+    .pressure-group-title h3 {
+      margin: 0;
+    }
+
+    .operation-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .operation-list li {
+      display: grid;
+      grid-template-columns: 116px minmax(0, 1fr);
+      gap: 12px;
+      padding: 11px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .operation-list strong {
+      color: var(--teal-dark);
+    }
+
+    .pressure-group.compare .operation-list strong {
+      color: var(--amber);
+    }
+
+    .operation-list p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .category-row td {
+      background: #dce9e7 !important;
+      color: #075e56;
+      font-weight: 700;
+    }
+
+    .category-row.compare td {
+      background: #f8e8c8 !important;
+      color: #7a4700;
+    }
+
+    .error-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .error-item {
+      border-top: 3px solid var(--red);
+      background: var(--surface);
+      padding: 15px;
+    }
+
+    .error-item ul {
+      margin: 8px 0 0;
+      padding-left: 20px;
+    }
+
+    .demo-shell {
+      overflow: hidden;
+      border: 1px solid #285766;
+      border-radius: var(--radius);
+      background: #0a1921;
+      color: #edf8fa;
+      box-shadow: 0 12px 30px rgba(12, 28, 37, 0.16);
+    }
+
+    .demo-toolbar {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px;
+      border-bottom: 1px solid #285766;
+      background: #102630;
+    }
+
+    .demo-controls {
+      display: flex;
+      flex: 1 1 auto;
+      flex-wrap: wrap;
+      align-items: end;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .demo-scenarios {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .demo-playback-field {
+      display: grid;
+      gap: 5px;
+      color: #91abb5;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .demo-segmented {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      overflow: hidden;
+      border: 1px solid #426976;
+      border-radius: 4px;
+    }
+
+    .demo-playback-button {
+      min-height: 34px;
+      border: 0;
+      border-right: 1px solid #426976;
+      background: #0d2029;
+      color: #bed1d8;
+      cursor: pointer;
+      padding: 5px 12px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .demo-playback-button:last-child {
+      border-right: 0;
+    }
+
+    .demo-playback-button.active {
+      background: #123a42;
+      color: #61ead9;
+    }
+
+    .demo-toolbar-actions,
+    .demo-manual-controls {
+      display: flex;
+      flex: 0 0 auto;
+      gap: 8px;
+    }
+
+    .demo-action:disabled {
+      cursor: default;
+      opacity: 0.42;
+    }
+
+    .demo-channel-field {
+      display: grid;
+      gap: 5px;
+      min-width: 210px;
+      color: #91abb5;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .demo-channel-field select,
+    .demo-channel-field input {
+      min-height: 36px;
+      border: 1px solid #426976;
+      border-radius: 4px;
+      background: #0d2029;
+      color: #61ead9;
+      padding: 6px 34px 6px 10px;
+      font: inherit;
+      font-size: 13px;
+    }
+
+    .demo-gain-field {
+      min-width: 260px;
+    }
+
+    .demo-choice,
+    .demo-action {
+      min-height: 36px;
+      border: 1px solid #426976;
+      border-radius: 4px;
+      background: #0d2029;
+      color: #bed1d8;
+      cursor: pointer;
+      padding: 6px 11px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .demo-choice:hover,
+    .demo-action:hover,
+    .demo-choice.active {
+      border-color: #33cdbc;
+      color: #61ead9;
+    }
+
+    .demo-choice.active {
+      background: #123a42;
+      box-shadow: inset 0 -2px 0 #33cdbc;
+    }
+
+    .demo-action {
+      flex: 0 0 auto;
+      border-color: #d49a36;
+      color: #ffd88d;
+    }
+
+    .demo-monitor {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 260px;
+      border-bottom: 1px solid #285766;
+    }
+
+    .demo-progress-area {
+      padding: 15px;
+    }
+
+    .demo-progress-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      color: #96afb9;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 12px;
+    }
+
+    .demo-progress-track {
+      height: 8px;
+      margin-top: 8px;
+      overflow: hidden;
+      border: 1px solid #426976;
+      background: #061218;
+    }
+
+    .demo-progress-fill {
+      width: 0;
+      height: 100%;
+      background: #2fd1bd;
+      transition: width 600ms ease;
+    }
+
+    .demo-state {
+      display: flex;
+      align-items: center;
+      padding: 15px;
+      border-left: 1px solid #285766;
+      color: #ffd88d;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 12px;
+    }
+
+    .demo-step-detail {
+      display: grid;
+      grid-template-columns: 94px minmax(0, 1fr);
+      gap: 16px;
+      align-items: center;
+      min-height: 94px;
+      padding: 15px;
+      border-bottom: 1px solid #285766;
+      background: #0d2029;
+    }
+
+    .demo-step-count {
+      border: 1px solid #2b756f;
+      background: #123a42;
+      padding: 9px 8px;
+      color: #61ead9;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .demo-step-copy strong {
+      display: block;
+      margin-bottom: 4px;
+      color: #ffd88d;
+      font-size: 15px;
+    }
+
+    .demo-step-copy p {
+      margin: 0;
+      color: #c2d3d9;
+      line-height: 1.65;
+    }
+
+    .demo-table-wrap {
+      overflow-x: auto;
+    }
+
+    .demo-table {
+      min-width: 1120px;
+      color: #17212b;
+      font-size: 12px;
+    }
+
+    .demo-table th {
+      border-color: #9da9af;
+      background: #dfe3e5;
+      color: #17212b;
+      padding: 6px 8px;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .demo-table td {
+      border-color: #b8c1c6;
+      background: #ffffff;
+      color: #17212b;
+      padding: 7px 8px;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .demo-table th.ict-key {
+      border-bottom: 2px solid #44dfcc;
+      background: #126f68;
+      color: #ffffff;
+      font-size: 14px;
+      text-align: center;
+    }
+
+    .demo-table td.ict-key {
+      background: #e3f7f4 !important;
+      color: #05665d;
+      font-size: 17px;
+      font-weight: 700;
+      text-align: center;
+      box-shadow: inset 0 -2px 0 rgba(18, 111, 104, 0.32);
+    }
+
+    .demo-table tbody tr:nth-child(even) td {
+      background: #f4f6f7;
+    }
+
+    .demo-table td.demo-active {
+      background: #0b8378 !important;
+      color: #ffffff;
+      box-shadow: inset 0 0 0 2px #36d6c3;
+      animation: cellPulse 1000ms ease-in-out infinite alternate;
+    }
+
+    .demo-table td.demo-done {
+      color: #087f73;
+      font-weight: 700;
+    }
+
+    .demo-table td.demo-time-empty {
+      background: #f1f3f4;
+    }
+
+    .demo-table tr.demo-row-active td:first-child {
+      box-shadow: inset 3px 0 0 #36d6c3;
+    }
+
+    .demo-foot {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 12px 15px;
+      color: #91abb5;
+      font-size: 12px;
+    }
+
+    .demo-foot strong {
+      color: #ffd88d;
+    }
+
+    .topbar {
+      border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+      background: rgba(255, 255, 255, 0.88);
+      color: var(--ink);
+      backdrop-filter: saturate(180%) blur(18px);
+    }
+
+    .topbar-inner,
+    main {
+      width: min(1120px, calc(100% - 32px));
+    }
+
+    .topbar-inner {
+      min-height: 58px;
+    }
+
+    .brand strong {
+      font-size: 18px;
+      font-weight: 650;
+    }
+
+    .brand span,
+    .system-state {
+      color: var(--muted);
+    }
+
+    .system-state,
+    .console-status,
+    .document-credit span {
+      display: none;
+    }
+
+    .topnav {
+      gap: 20px;
+    }
+
+    .topnav a {
+      color: #3a3a3c;
+      font-size: 13px;
+    }
+
+    .topnav a:hover {
+      color: var(--teal);
+    }
+
+    .system-state::before {
+      width: 6px;
+      height: 6px;
+      background: #30b46c;
+      box-shadow: none;
+    }
+
+    main {
+      padding-top: 34px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 650;
+    }
+
+    h2 {
+      font-weight: 650;
+    }
+
+    h3 {
+      font-weight: 600;
+    }
+
+    .document-credit {
+      margin-top: 6px;
+      color: var(--teal-dark);
+      font-weight: 600;
+    }
+
+    .document-credit span {
+      border-color: #b8d9f7;
+      border-radius: 4px;
+      background: #edf6ff;
+      color: var(--teal-dark);
+    }
+
+    .version-note {
+      border: 1px solid var(--line);
+      border-left: 3px solid var(--teal);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .section {
+      margin-top: 30px;
+      padding-top: 28px;
+    }
+
+    .tool-shell,
+    .demo-shell {
+      border-color: var(--line);
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: var(--shadow);
+    }
+
+    .mode-tabs {
+      border-color: var(--line);
+      background: var(--surface-alt);
+    }
+
+    .mode-tab {
+      border-color: var(--line);
+      color: var(--muted);
+    }
+
+    .mode-tab[aria-selected="true"] {
+      background: var(--surface);
+      color: var(--teal-dark);
+      box-shadow: inset 0 -2px 0 var(--teal);
+    }
+
+    .console-status {
+      border-color: var(--line);
+      background: #fbfbfd;
+      color: var(--muted);
+    }
+
+    .console-status strong {
+      color: #248a55;
+    }
+
+    .tool-controls,
+    .tool-output {
+      background: var(--surface);
+      color: var(--ink);
+    }
+
+    .tool-controls {
+      border-color: var(--line);
+    }
+
+    .tool-shell .field label,
+    .tool-shell .result-field label,
+    .tool-shell .field-help {
+      color: var(--muted);
+    }
+
+    .tool-shell .field select,
+    .tool-shell .field input,
+    .field select,
+    .field input,
+    .result-field input {
+      border-color: #c7c7cc;
+      background: var(--surface);
+    }
+
+    .result-field input,
+    .result-field input[readonly] {
+      border-color: #b9c9da;
+      background: #f5f9fd;
+      color: var(--teal-dark);
+    }
+
+    .icon-button {
+      border-color: #b9c9da;
+      background: #edf6ff;
+      color: var(--teal-dark);
+    }
+
+    .icon-button:hover {
+      background: #deefff;
+    }
+
+    .copy-all {
+      border-color: var(--teal);
+      border-radius: 6px;
+      background: var(--teal);
+      font-weight: 600;
+    }
+
+    .command-explain {
+      border-color: var(--line);
+    }
+
+    .explain-item span {
+      color: var(--muted);
+    }
+
+    .tool-message {
+      color: var(--teal-dark);
+    }
+
+    .notice,
+    .pressure-prereq {
+      border-left-width: 3px;
+      border-radius: 0 var(--radius) var(--radius) 0;
+    }
+
+    .default-band,
+    .calculator,
+    .table-wrap {
+      overflow: hidden;
+      border-radius: var(--radius);
+    }
+
+    .plain-panel,
+    .pressure-group,
+    .error-item {
+      border: 1px solid var(--line);
+      border-top: 3px solid var(--teal);
+      border-radius: var(--radius);
+    }
+
+    .plain-panel.amber,
+    .pressure-group.compare {
+      border-top-color: var(--amber);
+    }
+
+    .calculator-controls {
+      background: #fbfbfd;
+    }
+
+    .metric {
+      border-color: var(--line);
+      border-radius: 6px;
+      background: #fbfbfd;
+    }
+
+    .meter {
+      border-color: var(--line);
+      border-radius: 6px;
+      background: #e8e8ed;
+    }
+
+    .formula {
+      border-radius: 6px;
+      background: #f5f5f7;
+    }
+
+    th {
+      background: #f0f0f2;
+      color: #3a3a3c;
+    }
+
+    tbody tr:nth-child(even) {
+      background: #fbfbfd;
+    }
+
+    .steps li {
+      border: 1px solid var(--line);
+      border-top: 3px solid var(--teal);
+      border-radius: var(--radius);
+    }
+
+    .category-row td {
+      background: #edf7f2 !important;
+      color: #20744b;
+    }
+
+    .category-row.compare td {
+      background: #fff3df !important;
+      color: #8a4b00;
+    }
+
+    .error-item {
+      border-top-color: var(--red);
+    }
+
+    .demo-toolbar {
+      border-color: var(--line);
+      background: #fbfbfd;
+    }
+
+    .demo-channel-field {
+      color: var(--muted);
+    }
+
+    .demo-playback-field {
+      color: var(--muted);
+    }
+
+    .demo-segmented {
+      border-color: #c7c7cc;
+      background: #e8e8ed;
+    }
+
+    .demo-playback-button {
+      border-color: #c7c7cc;
+      background: transparent;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .demo-playback-button.active {
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+    }
+
+    .demo-channel-field select,
+    .demo-channel-field input {
+      border-color: #c7c7cc;
+      background: var(--surface);
+      color: var(--ink);
+    }
+
+    .demo-choice,
+    .demo-action {
+      border-color: #c7c7cc;
+      border-radius: 6px;
+      background: var(--surface);
+      color: #3a3a3c;
+      font-weight: 600;
+    }
+
+    .demo-choice:hover,
+    .demo-action:hover {
+      border-color: var(--teal);
+      color: var(--teal-dark);
+    }
+
+    .demo-choice.active {
+      border-color: var(--teal);
+      background: var(--teal);
+      color: #ffffff;
+      box-shadow: none;
+    }
+
+    .demo-action {
+      border-color: var(--teal);
+      color: var(--teal-dark);
+    }
+
+    .demo-monitor {
+      border-color: var(--line);
+    }
+
+    .demo-progress-head {
+      color: var(--muted);
+    }
+
+    .demo-progress-track {
+      border: 0;
+      border-radius: 4px;
+      background: #e8e8ed;
+    }
+
+    .demo-progress-fill {
+      background: var(--teal);
+    }
+
+    .demo-state {
+      border-color: var(--line);
+      color: var(--teal-dark);
+    }
+
+    .demo-step-detail {
+      border-color: var(--line);
+      background: var(--surface);
+    }
+
+    .demo-step-count {
+      border-color: #b8d9f7;
+      border-radius: 6px;
+      background: #edf6ff;
+      color: var(--teal-dark);
+    }
+
+    .demo-step-copy strong {
+      color: var(--ink);
+    }
+
+    .demo-step-copy p {
+      color: var(--muted);
+    }
+
+    .demo-table,
+    .demo-table td {
+      color: var(--ink);
+    }
+
+    .demo-table th {
+      border-color: var(--line);
+      background: #f0f0f2;
+      color: #3a3a3c;
+    }
+
+    .demo-table td {
+      border-color: var(--line);
+      background: var(--surface);
+    }
+
+    .demo-table th.ict-key {
+      border-color: #9bc9f4;
+      background: #e5f2ff;
+      color: var(--teal-dark);
+    }
+
+    .demo-table td.ict-key {
+      background: #f2f8ff !important;
+      color: var(--teal-dark);
+      box-shadow: inset 0 -2px 0 #b8d9f7;
+    }
+
+    .demo-table tbody tr:nth-child(even) td,
+    .demo-table td.demo-time-empty {
+      background: #fbfbfd;
+    }
+
+    .demo-table td.demo-active {
+      background: var(--teal) !important;
+      color: #ffffff;
+      box-shadow: inset 0 0 0 2px #70b8f5;
+    }
+
+    .demo-table td.demo-done {
+      color: var(--teal-dark);
+    }
+
+    .demo-table tr.demo-row-active td:first-child {
+      box-shadow: inset 3px 0 0 var(--teal);
+    }
+
+    .demo-foot {
+      border-top: 1px solid var(--line);
+      background: #fbfbfd;
+      color: var(--muted);
+    }
+
+    .demo-foot strong {
+      color: var(--ink);
+    }
+
+    @keyframes cellPulse {
+      from { filter: brightness(0.95); }
+      to { filter: brightness(1.25); }
+    }
+
+    footer {
+      margin-top: 42px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .no-script {
+      margin: 12px 0;
+      border-left: 4px solid var(--red);
+      background: var(--red-bg);
+      padding: 12px 16px;
+    }
+
+    @media (max-width: 900px) {
+      .topnav {
+        display: none;
+      }
+
+      .page-intro,
+      .tool-body,
+      .calculator {
+        grid-template-columns: 1fr;
+      }
+
+      .tool-controls,
+      .calculator-controls {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .two-column,
+      .error-grid,
+      .pressure-groups {
+        grid-template-columns: 1fr;
+      }
+
+      .demo-monitor {
+        grid-template-columns: 1fr;
+      }
+
+      .demo-state {
+        border-top: 1px solid #285766;
+        border-left: 0;
+      }
+
+      .steps {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 620px) {
+      main,
+      .topbar-inner {
+        width: min(100% - 20px, 1180px);
+      }
+
+      main {
+        padding-top: 20px;
+      }
+
+      h1 {
+        font-size: 25px;
+      }
+
+      h2 {
+        font-size: 21px;
+      }
+
+      .section-heading {
+        display: block;
+      }
+
+      .section-heading p {
+        margin-top: 6px;
+      }
+
+      .tool-controls,
+      .tool-output,
+      .calculator-controls,
+      .calculator-results {
+        padding: 16px;
+      }
+
+      .result-grid,
+      .metric-grid,
+      .default-band,
+      .steps {
+        grid-template-columns: 1fr;
+      }
+
+      .default-item {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .default-item:last-child {
+        border-bottom: 0;
+      }
+
+      .command-explain {
+        grid-template-columns: 1fr;
+      }
+
+      .demo-toolbar,
+      .demo-foot {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .demo-controls,
+      .demo-channel-field {
+        width: 100%;
+      }
+
+      .demo-toolbar-actions,
+      .demo-manual-controls {
+        width: 100%;
+      }
+
+      .demo-manual-controls {
+        flex: 2 1 0;
+        min-width: 0;
+        width: auto;
+      }
+
+      .demo-toolbar-actions > .demo-action {
+        flex: 1 1 0;
+        min-width: 0;
+      }
+
+      .demo-toolbar-actions .demo-action,
+      .demo-manual-controls .demo-action {
+        flex: 1 1 0;
+        min-width: 0;
+        padding-right: 6px;
+        padding-left: 6px;
+      }
+
+      .demo-step-detail {
+        grid-template-columns: 1fr;
+        gap: 9px;
+      }
+
+      .demo-step-count {
+        width: max-content;
+      }
+
+      .operation-list li {
+        grid-template-columns: 1fr;
+        gap: 3px;
+      }
+    }
+
+    @media print {
+      body {
+        background: #ffffff;
+        color: #000000;
+        font-size: 11pt;
+      }
+
+      .topbar,
+      .tool-shell,
+      .calculator,
+      .demo-shell,
+      .copy-all,
+      .icon-button,
+      .no-print {
+        display: none !important;
+      }
+
+      main {
+        width: 100%;
+        padding: 0;
+      }
+
+      .page-intro,
+      .two-column,
+      .error-grid {
+        display: block;
+      }
+
+      .section {
+        break-inside: avoid;
+        margin-top: 20px;
+        padding-top: 16px;
+      }
+
+      .plain-panel,
+      .error-item,
+      .default-band {
+        break-inside: avoid;
+        margin-top: 10px;
+      }
+
+      .table-wrap {
+        overflow: visible;
+      }
+
+      table {
+        min-width: 0;
+        font-size: 9pt;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <strong>RGBWIR4_PRS4 V1.3</strong>
+        <span>环境光与压力测试主板操作帮助</span>
+      </div>
+      <nav class="topnav" aria-label="页面目录">
+        <a href="#assistant">填写助手</a>
+        <a href="#demo">动画演示</a>
+        <a href="#tcs3400">环境光测试</a>
+        <a href="#pressure">压力测试</a>
+        <a href="#errors">异常处理</a>
+      </nav>
+      <span class="system-state">LOCAL / READY</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="page-intro" aria-labelledby="page-title">
+      <div>
+        <h1 id="page-title">V1.3 调试操作帮助</h1>
+        <p class="document-credit"><span>DOCUMENT</span>孙伟和曹凤英帮助文档</p>
+        <p class="lead">支持四路TCS3400环境光参数设置与通道读取，以及RS485压力读取、清零、上下限判断和Y1～Y4输出控制。</p>
+      </div>
+      <aside class="version-note">
+        <strong>当前参数已经定稿</strong>
+        本版本的指令、六档积分时间、四档增益以及压力操作范围保持固定。TCS3400上电默认使用27.8ms、4x。
+      </aside>
+    </section>
+
+    <noscript>
+      <div class="no-script">浏览器未启用JavaScript，填写助手和计算器不可用；后面的固定操作表仍可正常查看。</div>
+    </noscript>
+
+    <section class="section" id="assistant" aria-labelledby="assistant-title">
+      <div class="section-heading">
+        <div>
+          <h2 id="assistant-title">三字段填写助手</h2>
+          <p>选择测试对象和操作后，直接把生成的三个值填写到调试软件对应位置。</p>
+        </div>
+      </div>
+
+      <div class="tool-shell">
+        <div class="mode-tabs" role="tablist" aria-label="测试对象">
+          <button class="mode-tab" id="tab-tcs" type="button" role="tab" aria-selected="true" aria-controls="tcs-controls" data-mode="tcs">TCS3400环境光</button>
+          <button class="mode-tab" id="tab-pressure" type="button" role="tab" aria-selected="false" aria-controls="pressure-controls" data-mode="pressure">压力传感器</button>
+        </div>
+        <div class="console-status">
+          <span>ICT FIELD ASSISTANT</span>
+          <strong>STATUS: READY</strong>
+        </div>
+
+        <div class="tool-body">
+          <div class="tool-controls">
+            <div id="tcs-controls" role="tabpanel" aria-labelledby="tab-tcs">
+              <div class="control-grid">
+                <div class="field">
+                  <label for="tcs-sensor">传感器路数</label>
+                  <select id="tcs-sensor">
+                    <option value="1">第1路TCS3400</option>
+                    <option value="2">第2路TCS3400</option>
+                    <option value="3">第3路TCS3400</option>
+                    <option value="4">第4路TCS3400</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="tcs-action">操作</label>
+                  <select id="tcs-action">
+                    <option value="integration">设置积分时间</option>
+                    <option value="gain">设置增益</option>
+                    <option value="red">读取R通道</option>
+                    <option value="green">读取G通道</option>
+                    <option value="blue">读取B通道</option>
+                    <option value="clear">读取Clear通道</option>
+                    <option value="ir">读取IR通道</option>
+                    <option value="id">读取芯片ID</option>
+                  </select>
+                </div>
+                <div class="field" id="tcs-parameter-field">
+                  <label for="tcs-parameter">积分时间档位</label>
+                  <select id="tcs-parameter"></select>
+                  <p class="field-help" id="tcs-parameter-help">只列出固件支持的固定档位。</p>
+                </div>
+              </div>
+            </div>
+
+            <div id="pressure-controls" role="tabpanel" aria-labelledby="tab-pressure" hidden>
+              <div class="control-grid">
+                <div class="field">
+                  <label for="pressure-action">操作</label>
+                  <select id="pressure-action">
+                    <option value="read">普通读取压力</option>
+                    <option value="zero">清零压力仪表</option>
+                    <option value="lower">设置通道下限</option>
+                    <option value="upper">设置通道上限</option>
+                    <option value="compare">读取、比较并控制Y输出</option>
+                  </select>
+                </div>
+                <div class="field" id="pressure-channel-field" hidden>
+                  <label for="pressure-channel">压力逻辑通道</label>
+                  <select id="pressure-channel">
+                    <option value="1">通道1，对应Y1</option>
+                    <option value="2">通道2，对应Y2</option>
+                    <option value="3">通道3，对应Y3</option>
+                    <option value="4">通道4，对应Y4</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="pressure-parameter" id="pressure-parameter-label">Modbus地址</label>
+                  <input id="pressure-parameter" type="number" min="1" max="247" step="1" value="1" inputmode="numeric">
+                  <p class="field-help" id="pressure-parameter-help">允许范围：1～247。</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="tool-output">
+            <h3>填写结果</h3>
+            <div class="result-grid">
+              <div class="result-field">
+                <label for="pin1-output">Pin1（指令码）</label>
+                <div class="result-input-wrap">
+                  <input id="pin1-output" type="text" value="10" readonly aria-readonly="true" aria-describedby="pin1-help">
+                  <button class="icon-button" type="button" data-copy-target="pin1-output" title="复制Pin1" aria-label="复制Pin1">⧉</button>
+                </div>
+                <p class="field-help" id="pin1-help">左边数字1表示第1路TCS3400；右边数字0表示设置积分时间。</p>
+              </div>
+              <div class="result-field">
+                <label for="pin2-output">Pin2（保留码）</label>
+                <div class="result-input-wrap">
+                  <input id="pin2-output" type="text" value="00" maxlength="2" inputmode="numeric" aria-describedby="pin2-help">
+                  <button class="icon-button" type="button" data-copy-target="pin2-output" title="复制Pin2" aria-label="复制Pin2">⧉</button>
+                </div>
+                <p class="field-help" id="pin2-help">允许00～99，默认00；数值不参与功能判断。</p>
+              </div>
+              <div class="result-field">
+                <label for="work-output">工作值2（参数码）</label>
+                <div class="result-input-wrap">
+                  <input id="work-output" type="text" value="028" readonly aria-readonly="true">
+                  <button class="icon-button" type="button" data-copy-target="work-output" title="复制工作值2" aria-label="复制工作值2">⧉</button>
+                </div>
+                <p class="field-help" id="work-purpose-help">当前参数：积分时间档位，决定单次采光累计时间。</p>
+              </div>
+            </div>
+
+            <button class="copy-all" id="copy-all" type="button">复制三项填写值</button>
+
+            <div class="command-explain">
+              <div class="explain-item">
+                <span>Pin1组成和含义</span>
+                <strong id="pin1-explain">目标码1：第1路TCS3400；功能码0：设置积分时间</strong>
+              </div>
+              <div class="explain-item">
+                <span>Pin2保留码</span>
+                <strong>允许00～99，建议统一填写00</strong>
+              </div>
+              <div class="explain-item">
+                <span>工作值2参数</span>
+                <strong id="work-purpose">积分时间档位</strong>
+              </div>
+              <div class="explain-item">
+                <span>预计正常返回</span>
+                <strong id="expected-result">积分档位值27.8</strong>
+              </div>
+              <div class="explain-item">
+                <span>最大计数</span>
+                <strong id="max-count">10240（10周期 × 1024）</strong>
+              </div>
+              <div class="explain-item">
+                <span>测试速度</span>
+                <strong id="speed-advice">典型积分27.8ms；固件最长等待40ms</strong>
+              </div>
+              <div class="explain-item">
+                <span>本次作用</span>
+                <strong id="operation-effect">将第1路积分时间设置为27.8ms</strong>
+              </div>
+              <div class="explain-item">
+                <span>工作值2范围</span>
+                <strong id="work-range">003、028、051、103、178、712</strong>
+              </div>
+              <div class="explain-item">
+                <span>调节建议</span>
+                <strong id="adjustment-advice">数值偏小可提高增益或延长积分；接近10240时应降低增益或缩短积分</strong>
+              </div>
+            </div>
+            <div class="tool-message" id="tool-message" role="status" aria-live="polite"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="notice">
+        <strong>字段规则：</strong>Pin1由目标码和功能码组成；Pin2只要求是两位数字；工作值2固定为三位数字，并且含义随Pin1操作变化。
+      </div>
+    </section>
+
+    <section class="section" id="demo" aria-labelledby="demo-title">
+      <div class="section-heading">
+        <div>
+          <h2 id="demo-title">ICT填写动画演示</h2>
+          <p>支持自动连续播放和手动逐步查看；按场景选择传感器、通道、积分时间、增益或压力地址后，动画会说明每个填写值的作用。</p>
+        </div>
+      </div>
+
+      <div class="demo-shell">
+        <div class="demo-toolbar">
+          <div class="demo-controls">
+            <div class="demo-scenarios" role="group" aria-label="演示项目">
+              <button class="demo-choice active" type="button" data-demo="read-r">读取环境光通道</button>
+              <button class="demo-choice" type="button" data-demo="set-integration">设置积分时间并读取通道</button>
+              <button class="demo-choice" type="button" data-demo="set-gain">设置增益并读取通道</button>
+              <button class="demo-choice" type="button" data-demo="pressure-read">普通读取压力</button>
+              <button class="demo-choice" type="button" data-demo="pressure-limit">设置上下限并比较</button>
+            </div>
+            <div class="demo-playback-field">
+              <span>播放模式</span>
+              <div class="demo-segmented" role="group" aria-label="动画播放模式">
+                <button class="demo-playback-button active" type="button" data-playback="auto" aria-pressed="true">自动</button>
+                <button class="demo-playback-button" type="button" data-playback="manual" aria-pressed="false">手动</button>
+              </div>
+            </div>
+            <label class="demo-channel-field" id="demo-channel-field" for="demo-channel">
+              <span id="demo-channel-label">环境光传感器</span>
+              <select id="demo-channel">
+                <option value="1">第1路TCS3400</option>
+                <option value="2">第2路TCS3400</option>
+                <option value="3">第3路TCS3400</option>
+                <option value="4">第4路TCS3400</option>
+              </select>
+            </label>
+            <label class="demo-channel-field" id="demo-read-channel-field" for="demo-read-channel">
+              <span>读取通道</span>
+              <select id="demo-read-channel">
+                <option value="red">R通道</option>
+                <option value="green">G通道</option>
+                <option value="blue">B通道</option>
+                <option value="clear">Clear通道</option>
+                <option value="ir">IR通道</option>
+                <option value="id">芯片ID</option>
+              </select>
+            </label>
+            <label class="demo-channel-field" id="demo-integration-field" for="demo-integration" hidden>
+              <span>积分时间</span>
+              <select id="demo-integration">
+                <option value="003">003 — 2.78ms</option>
+                <option value="028">028 — 27.8ms（默认）</option>
+                <option value="051">051 — 51ms档</option>
+                <option value="103">103 — 103ms档</option>
+                <option value="178">178 — 178ms档</option>
+                <option value="712">712 — 712ms档</option>
+              </select>
+            </label>
+            <label class="demo-channel-field demo-gain-field" id="demo-gain-field" for="demo-gain" hidden>
+              <span>增益档位</span>
+              <select id="demo-gain">
+                <option value="001">001 — 1x（强光、近距离）</option>
+                <option value="004">004 — 4x（默认、普通LED）</option>
+                <option value="016">016 — 16x（较弱光）</option>
+                <option value="064">064 — 64x（极弱光、远距离）</option>
+              </select>
+            </label>
+            <label class="demo-channel-field" id="demo-pressure-address-field" for="demo-pressure-address" hidden>
+              <span>Modbus地址（001～247）</span>
+              <input id="demo-pressure-address" type="number" min="1" max="247" step="1" value="1" inputmode="numeric">
+            </label>
+          </div>
+          <div class="demo-toolbar-actions">
+            <div class="demo-manual-controls" id="demo-manual-controls" hidden>
+              <button class="demo-action" id="demo-prev" type="button" disabled>上一步</button>
+              <button class="demo-action" id="demo-next" type="button">下一步</button>
+            </div>
+            <button class="demo-action" id="demo-replay" type="button">重新演示</button>
+          </div>
+        </div>
+
+        <div class="demo-monitor">
+          <div class="demo-progress-area">
+            <div class="demo-progress-head">
+              <span id="demo-title-text">第1路TCS3400读取R</span>
+              <strong id="demo-progress-text">0%</strong>
+            </div>
+            <div class="demo-progress-track" aria-hidden="true">
+              <div class="demo-progress-fill" id="demo-progress-fill"></div>
+            </div>
+          </div>
+          <div class="demo-state" id="demo-state" role="status" aria-live="polite">等待开始</div>
+        </div>
+
+        <div class="demo-step-detail" aria-live="polite">
+          <span class="demo-step-count" id="demo-step-count">步骤 0 / 5</span>
+          <div class="demo-step-copy">
+            <strong id="demo-step-title">准备演示</strong>
+            <p id="demo-step-description">将从Pin1开始，逐项说明本行需要填写的内容。</p>
+          </div>
+        </div>
+
+        <div class="demo-table-wrap">
+          <table class="demo-table">
+            <thead>
+              <tr>
+                <th>序号</th>
+                <th>工作类型</th>
+                <th>工作名称</th>
+                <th>工作方式</th>
+                <th>工作值1</th>
+                <th class="ict-key">工作值2</th>
+                <th>时间</th>
+                <th class="ict-key">Pin1</th>
+                <th class="ict-key">Pin2</th>
+                <th>名称</th>
+                <th>测量值</th>
+              </tr>
+            </thead>
+            <tbody id="demo-table-body"></tbody>
+          </table>
+        </div>
+
+        <div class="demo-foot">
+          <span>动画顺序：<strong>Pin1 → Pin2 → 工作值2 → 时间留空 → 返回</strong></span>
+          <span>时间字段默认不填写；每一步的填写值和作用会显示在说明区。</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="tcs3400" aria-labelledby="tcs-title">
+      <div class="section-heading">
+        <div>
+          <h2 id="tcs-title">TCS3400环境光测试</h2>
+          <p>四路传感器配置相互独立。设置某一路的积分时间或增益，不会改变其他三路。</p>
+        </div>
+      </div>
+
+      <div class="default-band">
+        <div class="default-item">
+          <span>上电默认积分时间</span>
+          <strong>27.8ms</strong>
+        </div>
+        <div class="default-item">
+          <span>上电默认增益</span>
+          <strong>4x</strong>
+        </div>
+        <div class="default-item">
+          <span>单个积分周期</span>
+          <strong>2.78ms / 1024计数</strong>
+        </div>
+      </div>
+
+      <h3 style="margin-top: 28px;">四路环境光完整命令表</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>功能</th>
+              <th>第1路Pin1</th>
+              <th>第2路Pin1</th>
+              <th>第3路Pin1</th>
+              <th>第4路Pin1</th>
+              <th>Pin2</th>
+              <th>工作值2</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>设置积分时间</td><td class="numeric">10</td><td class="numeric">20</td><td class="numeric">30</td><td class="numeric">40</td><td>00～99</td><td class="numeric">003 / 028 / 051 / 103 / 178 / 712</td></tr>
+            <tr><td>读取R</td><td class="numeric">11</td><td class="numeric">21</td><td class="numeric">31</td><td class="numeric">41</td><td>00～99</td><td class="numeric">000</td></tr>
+            <tr><td>读取G</td><td class="numeric">12</td><td class="numeric">22</td><td class="numeric">32</td><td class="numeric">42</td><td>00～99</td><td class="numeric">000</td></tr>
+            <tr><td>读取B</td><td class="numeric">13</td><td class="numeric">23</td><td class="numeric">33</td><td class="numeric">43</td><td>00～99</td><td class="numeric">000</td></tr>
+            <tr><td>读取Clear</td><td class="numeric">14</td><td class="numeric">24</td><td class="numeric">34</td><td class="numeric">44</td><td>00～99</td><td class="numeric">000</td></tr>
+            <tr><td>读取IR</td><td class="numeric">15</td><td class="numeric">25</td><td class="numeric">35</td><td class="numeric">45</td><td>00～99</td><td class="numeric">000</td></tr>
+            <tr><td>设置增益</td><td class="numeric">16</td><td class="numeric">26</td><td class="numeric">36</td><td class="numeric">46</td><td>00～99</td><td class="numeric">001 / 004 / 016 / 064</td></tr>
+            <tr><td>保留，返回异常</td><td class="numeric">17</td><td class="numeric">27</td><td class="numeric">37</td><td class="numeric">47</td><td>00～99</td><td>任意值均异常</td></tr>
+            <tr><td>保留，返回异常</td><td class="numeric">18</td><td class="numeric">28</td><td class="numeric">38</td><td class="numeric">48</td><td>00～99</td><td>任意值均异常</td></tr>
+            <tr><td>读取ID</td><td class="numeric">19</td><td class="numeric">29</td><td class="numeric">39</td><td class="numeric">49</td><td>00～99</td><td class="numeric">000</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="field-help">Pin2为保留码，建议统一填写00；表中的00～99表示任意两位数字都可通过格式检查。</p>
+
+      <div class="two-column">
+        <article class="plain-panel">
+          <h3>积分时间的作用</h3>
+          <p>积分时间决定传感器持续收集光信号的时间。时间越长，弱光下读数通常越大，但响应更慢，也更容易达到65535饱和。</p>
+          <ul>
+            <li>强光、近距离：优先缩短积分时间。</li>
+            <li>弱光、隔着外壳：可以逐档增加积分时间。</li>
+            <li>数据接近65535：应缩短积分时间或降低增益。</li>
+          </ul>
+        </article>
+        <article class="plain-panel amber">
+          <h3>增益的作用</h3>
+          <p>增益用于放大光信号。提高增益通常能让弱光读数更明显，但同时会放大噪声，并增加饱和风险。</p>
+          <ul>
+            <li>默认从4x开始。</li>
+            <li>偏暗时先提高到16x。</li>
+            <li>64x只用于极弱光，使用时重点观察噪声和饱和。</li>
+          </ul>
+        </article>
+      </div>
+
+      <h3 style="margin-top: 28px;">积分与增益计算器</h3>
+      <div class="calculator">
+        <div class="calculator-controls">
+          <div class="control-grid">
+            <div class="field">
+              <label for="calc-integration">积分时间档位</label>
+              <select id="calc-integration"></select>
+            </div>
+            <div class="field">
+              <label for="calc-gain">增益档位</label>
+              <select id="calc-gain"></select>
+            </div>
+          </div>
+          <p class="field-help">积分时间决定测试速度和最大计数；增益越大，同一光照下读数通常越大。相对采样量只用于比较档位强弱。</p>
+        </div>
+        <div class="calculator-results">
+          <div class="metric-grid">
+            <div class="metric"><span>工作值2</span><strong id="calc-work">028</strong></div>
+            <div class="metric"><span>积分时间档位</span><strong id="calc-level">第2档</strong></div>
+            <div class="metric"><span>积分周期</span><strong id="calc-cycles">10</strong></div>
+            <div class="metric"><span>典型积分时间</span><strong id="calc-time">27.80ms</strong></div>
+            <div class="metric"><span>测试速度</span><strong id="calc-speed">较快</strong></div>
+            <div class="metric"><span>固件最长等待</span><strong id="calc-wait">40ms</strong></div>
+            <div class="metric"><span>最大计数</span><strong id="calc-counts">10240</strong></div>
+            <div class="metric"><span>相对采样量</span><strong id="calc-relative">40</strong></div>
+          </div>
+          <div class="sensitivity">
+            <div class="sensitivity-head">
+              <span>相对采样量：周期数 × 增益</span>
+              <strong id="calc-gain-label">4x</strong>
+            </div>
+            <div class="meter" aria-hidden="true"><div class="meter-fill" id="sensitivity-fill"></div></div>
+          </div>
+          <div class="formula" id="calc-formula">10周期 × 2.78ms = 27.80ms；min(10 × 1024, 65535) = 10240</div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>工作值2</th>
+              <th>积分时间设置</th>
+              <th>周期</th>
+              <th>典型时间</th>
+              <th>测试速度</th>
+              <th>最大计数</th>
+              <th>推荐用途</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="numeric">003</td><td>第1档积分时间</td><td>1</td><td>2.78ms</td><td>最快，最长等待13ms</td><td>1024</td><td>高亮近距离、快速扫描</td></tr>
+            <tr><td class="numeric">028</td><td>第2档积分时间（默认）</td><td>10</td><td>27.8ms</td><td>较快，最长等待40ms</td><td>10240</td><td>普通LED，固件默认档</td></tr>
+            <tr><td class="numeric">051</td><td>第3档积分时间</td><td>18</td><td>约50.04ms，档位标称51ms</td><td>中等，最长等待63ms</td><td>18432</td><td>中弱光，兼顾速度和灵敏度</td></tr>
+            <tr><td class="numeric">103</td><td>第4档积分时间</td><td>37</td><td>约102.86ms，档位标称103ms</td><td>较慢，最长等待119ms</td><td>37888</td><td>弱光、反射检测</td></tr>
+            <tr><td class="numeric">178</td><td>第5档积分时间</td><td>64</td><td>约177.92ms，档位标称178ms</td><td>慢，最长等待198ms</td><td>65535</td><td>非常弱的LED、高灵敏检测</td></tr>
+            <tr><td class="numeric">712</td><td>第6档积分时间</td><td>256</td><td>约711.68ms，档位标称712ms</td><td>最慢，最长等待761ms</td><td>65535</td><td>极暗或远距离，响应最慢</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>工作值2</th>
+              <th>增益</th>
+              <th>对读数的影响</th>
+              <th>推荐用途</th>
+              <th>使用提醒</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="numeric">001</td><td>1x</td><td>不额外放大，数值最小</td><td>高亮LED、距离很近</td><td>降低饱和风险</td></tr>
+            <tr><td class="numeric">004</td><td>4x</td><td>同条件下数值通常比1x大</td><td>普通RGBW LED</td><td>固件上电默认档</td></tr>
+            <tr><td class="numeric">016</td><td>16x</td><td>继续放大弱光数值</td><td>较暗LED、隔着外壳</td><td>弱光调试优先尝试</td></tr>
+            <tr><td class="numeric">064</td><td>64x</td><td>数值通常最大，最易饱和</td><td>极弱光或远距离</td><td>注意噪声和饱和</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="notice">
+        <strong>速度与数值规律：</strong>积分时间越短，单次测试越快，但最大计数和弱光灵敏度更低；增益越大，同一光照下读数通常越大，但不会缩短测试时间，并会提高噪声和饱和风险。
+      </div>
+
+      <h3 style="margin-top: 28px;">推荐采样组合</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>场景</th>
+              <th>积分时间</th>
+              <th>增益</th>
+              <th>调整建议</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>高速强光</td><td>2.78ms</td><td>1x</td><td>适合高亮、近距离和快速扫描</td></tr>
+            <tr><td>强光</td><td>27.8ms</td><td>1x</td><td>读数偏高时降低饱和风险</td></tr>
+            <tr><td>默认测试</td><td>27.8ms</td><td>4x</td><td>普通RGBW LED从这里开始</td></tr>
+            <tr><td>弱光</td><td>27.8ms</td><td>16x</td><td>先提高增益，不急着拉长等待</td></tr>
+            <tr><td>平衡灵敏</td><td>51ms档</td><td>16x</td><td>中弱光下兼顾速度和灵敏度</td></tr>
+            <tr><td>高灵敏</td><td>103ms</td><td>16x</td><td>弱光或反射检测</td></tr>
+            <tr><td>超高灵敏</td><td>178ms</td><td>16x</td><td>非常弱的LED，检查是否饱和</td></tr>
+            <tr><td>极暗</td><td>712ms</td><td>16x，必要时64x</td><td>响应很慢，重点检查噪声和饱和</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 style="margin-top: 28px;">TCS3400填写示例</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>操作</th>
+              <th>Pin1</th>
+              <th>Pin2</th>
+              <th>工作值2</th>
+              <th>正常结果</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>第1路设置27.8ms</td><td class="numeric">10</td><td class="numeric">00</td><td class="numeric">028</td><td>返回27.8</td></tr>
+            <tr><td>第1路设置4x</td><td class="numeric">16</td><td class="numeric">00</td><td class="numeric">004</td><td>返回4.0</td></tr>
+            <tr><td>第1路读取R</td><td class="numeric">11</td><td class="numeric">00</td><td class="numeric">000</td><td>返回R通道计数</td></tr>
+            <tr><td>第1路读取IR</td><td class="numeric">15</td><td class="numeric">00</td><td class="numeric">000</td><td>返回IR计数</td></tr>
+            <tr><td>第2路读取ID</td><td class="numeric">29</td><td class="numeric">00</td><td class="numeric">000</td><td>返回芯片ID数值</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="notice">
+        <strong>设置顺序：</strong>上电后如果默认27.8ms、4x适合当前测试，可以直接读取。需要调整时，先单独设置积分时间，再单独设置增益，最后读取R、G、B、Clear或IR。
+      </div>
+    </section>
+
+    <section class="section" id="pressure" aria-labelledby="pressure-title">
+      <div class="section-heading">
+        <div>
+          <h2 id="pressure-title">压力传感器测试</h2>
+          <p>压力仪表通过RS485访问。工作值2在读取和清零时表示实际Modbus地址，在设置限值时表示整数压力限值。</p>
+        </div>
+      </div>
+
+      <div class="default-band">
+        <div class="default-item">
+          <span>Modbus地址范围</span>
+          <strong>001～247</strong>
+        </div>
+        <div class="default-item">
+          <span>上下限范围</span>
+          <strong>000～999</strong>
+        </div>
+        <div class="default-item">
+          <span>通信参数</span>
+          <strong>115200 / 8N1</strong>
+        </div>
+      </div>
+
+      <div class="pressure-prereq">
+        <strong>测试前先确认：</strong>仪表供电、RS485 A/B线、115200 / 8N1通信参数和实际Modbus地址。
+      </div>
+
+      <div class="pressure-groups">
+        <section class="pressure-group" aria-labelledby="pressure-basic-title">
+          <div class="pressure-group-title">
+            <span>1</span>
+            <h3 id="pressure-basic-title">普通读取与清零</h3>
+          </div>
+          <ul class="operation-list">
+            <li>
+              <strong>普通读取</strong>
+              <p><b>Pin1 50</b>，工作值2填写地址001～247。读取实际压力，不比较上下限，也不改变Y输出。</p>
+            </li>
+            <li>
+              <strong>按需清零</strong>
+              <p><b>Pin1 51</b>，工作值2填写地址001～247。成功返回0.0，不改变限值和Y输出。</p>
+            </li>
+          </ul>
+        </section>
+
+        <section class="pressure-group compare" aria-labelledby="pressure-compare-title">
+          <div class="pressure-group-title">
+            <span>2</span>
+            <h3 id="pressure-compare-title">上下限与比较读取</h3>
+          </div>
+          <ul class="operation-list">
+            <li>
+              <strong>① 设置下限</strong>
+              <p>第1～4组使用Pin1 60 / 70 / 80 / 90，工作值2填写整数限值000～999。</p>
+            </li>
+            <li>
+              <strong>② 设置上限</strong>
+              <p>第1～4组使用Pin1 61 / 71 / 81 / 91，工作值2填写整数限值000～999，且上限必须大于下限。</p>
+            </li>
+            <li>
+              <strong>③ 比较读取</strong>
+              <p>第1～4组使用Pin1 62 / 72 / 82 / 92，工作值2填写地址001～247；读取成功后更新Y1～Y4。</p>
+            </li>
+          </ul>
+        </section>
+      </div>
+
+      <h3 style="margin-top: 28px;">压力完整命令表</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>功能</th>
+              <th>第1组Pin1</th>
+              <th>第2组Pin1</th>
+              <th>第3组Pin1</th>
+              <th>第4组Pin1</th>
+              <th>Pin2</th>
+              <th>工作值2</th>
+              <th>对Y输出的影响</th>
+              <th>正常返回</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="category-row"><td colspan="9">A. 普通读取与清零</td></tr>
+            <tr><td>普通读取压力</td><td class="numeric">50</td><td class="numeric">50</td><td class="numeric">50</td><td class="numeric">50</td><td>00～99</td><td>地址001～247</td><td>不改变Y</td><td>带正负号的实际压力</td></tr>
+            <tr><td>清零压力仪表</td><td class="numeric">51</td><td class="numeric">51</td><td class="numeric">51</td><td class="numeric">51</td><td>00～99</td><td>地址001～247</td><td>不改变Y</td><td>0.0</td></tr>
+            <tr class="category-row compare"><td colspan="9">B. 上下限与比较读取</td></tr>
+            <tr><td>设置下限</td><td class="numeric">60</td><td class="numeric">70</td><td class="numeric">80</td><td class="numeric">90</td><td>00～99</td><td>限值000～999</td><td>释放Y1 / Y2 / Y3 / Y4</td><td>设置的下限值</td></tr>
+            <tr><td>设置上限</td><td class="numeric">61</td><td class="numeric">71</td><td class="numeric">81</td><td class="numeric">91</td><td>00～99</td><td>限值000～999</td><td>释放Y1 / Y2 / Y3 / Y4</td><td>设置的上限值</td></tr>
+            <tr><td>读取并比较</td><td class="numeric">62</td><td class="numeric">72</td><td class="numeric">82</td><td class="numeric">92</td><td>00～99</td><td>地址001～247</td><td>更新Y1 / Y2 / Y3 / Y4</td><td>带正负号的实际压力</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="field-help">普通读取和清零不区分逻辑组；四列都填写相同Pin1。只有上下限和比较操作按第1～4组分别控制Y1～Y4。</p>
+
+      <div class="two-column">
+        <article class="plain-panel">
+          <h3>压力值换算</h3>
+          <p>主板先读取有符号原始压力，再读取仪表小数位。小数位允许0～4，最终结果按原始值除以10的对应次方计算。</p>
+          <p>例如原始值为 <code>-1234</code>，小数位为 <code>2</code>，返回压力为 <code>-12.34</code>，单位沿用仪表当前显示单位。</p>
+        </article>
+        <article class="plain-panel amber">
+          <h3>上下限判断</h3>
+          <p>比较时使用压力绝对值，因此正压力和负压力按相同大小判断；返回给调试软件的压力仍保留原始正负号。</p>
+          <p>小于下限或大于上限才触发。等于下限或上限时不触发。</p>
+        </article>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>限值状态</th>
+              <th>判断条件</th>
+              <th>触发结果</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>只设置下限</td><td>|实际压力| &lt; 下限</td><td>对应Y触发</td></tr>
+            <tr><td>只设置上限</td><td>|实际压力| &gt; 上限</td><td>对应Y触发</td></tr>
+            <tr><td>同时设置上下限</td><td>|实际压力| &lt; 下限，或 |实际压力| &gt; 上限</td><td>对应Y触发</td></tr>
+            <tr><td>没有设置限值</td><td>比较读取成功</td><td>释放对应Y</td></tr>
+            <tr><td>通信失败</td><td>没有得到有效压力</td><td>保持原Y状态</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 style="margin-top: 28px;">压力填写示例</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>操作</th>
+              <th>Pin1</th>
+              <th>Pin2</th>
+              <th>工作值2</th>
+              <th>正常结果</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>读取地址1压力</td><td class="numeric">50</td><td class="numeric">00</td><td class="numeric">001</td><td>返回实际压力</td></tr>
+            <tr><td>清零地址1仪表</td><td class="numeric">51</td><td class="numeric">00</td><td class="numeric">001</td><td>返回0.0</td></tr>
+            <tr><td>第1组设置下限100</td><td class="numeric">60</td><td class="numeric">00</td><td class="numeric">100</td><td>返回100.0</td></tr>
+            <tr><td>第1组设置上限200</td><td class="numeric">61</td><td class="numeric">00</td><td class="numeric">200</td><td>返回200.0</td></tr>
+            <tr><td>读取地址3并控制Y1</td><td class="numeric">62</td><td class="numeric">00</td><td class="numeric">003</td><td>返回地址3的实际压力</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="notice">
+        <strong>掉电说明：</strong>四组上下限只保存在主板RAM中，重新上电后全部清除。仪表地址没有绑定到某个Y通道，每次比较读取都要在工作值2中填写本次要访问的实际地址。
+      </div>
+    </section>
+
+    <section class="section" id="errors" aria-labelledby="errors-title">
+      <div class="section-heading">
+        <div>
+          <h2 id="errors-title">异常报错与排查</h2>
+          <p>当前版本所有异常统一返回 <strong class="numeric">-1.0</strong>，不区分具体错误编号。看到-1.0时按下面顺序排查。</p>
+        </div>
+      </div>
+
+      <div class="notice error">
+        <strong>统一异常值：-1.0</strong>。一次操作只返回一次结果；上一操作尚未完成时继续提交，也可能得到异常。
+      </div>
+
+      <div class="error-grid">
+        <article class="error-item">
+          <h3>先查填写内容</h3>
+          <ul>
+            <li>Pin1是否是表中已经定义的操作。</li>
+            <li>Pin2是否正好为两位数字。</li>
+            <li>工作值2是否为三位合法参数。</li>
+            <li>读取颜色、IR或ID时是否填写000。</li>
+            <li>积分、增益、地址和限值是否越界。</li>
+          </ul>
+        </article>
+        <article class="error-item">
+          <h3>再查连接和时序</h3>
+          <ul>
+            <li>等待上一操作返回后再提交下一项。</li>
+            <li>检查TCS3400供电和对应SCL/SDA。</li>
+             <li>检查压力仪表供电、A/B线和地址。</li>
+             <li>确认压力仪表为115200bps、8N1。</li>
+             <li>TCS3400每条读取命令只采样一次，失败时不会自动重发。</li>
+             <li>IR读取会等待普通Clear恢复完成后再返回结果。</li>
+             <li>压力响应超时为200ms，不自动重试。</li>
+          </ul>
+        </article>
+        <article class="error-item">
+          <h3>恢复方式</h3>
+          <ul>
+            <li>TCS3400重新接好后，再次操作会自动尝试初始化。</li>
+            <li>积分或增益设置失败时，主板会尝试恢复旧值。</li>
+            <li>压力通信失败后检查连接，再手动重新操作。</li>
+            <li>比较读取失败时，对应Y保持原状态。</li>
+            <li>非法上下限不会覆盖已经保存的旧限值。</li>
+          </ul>
+        </article>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>常见情况</th>
+              <th>为什么报错</th>
+              <th>正确处理</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>读取操作的工作值2不是000</td><td>读取R/G/B/Clear/IR/ID不接受其他参数</td><td>改为000</td></tr>
+            <tr><td>积分时间填写177</td><td>不属于六个固定档位</td><td>从003、028、051、103、178、712中选择</td></tr>
+            <tr><td>增益填写008</td><td>不属于四个固定档位</td><td>从001、004、016、064中选择</td></tr>
+            <tr><td>压力地址填写000或248</td><td>超出地址1～247</td><td>填写仪表真实地址</td></tr>
+            <tr><td>下限大于或等于上限</td><td>上下限关系无效</td><td>保证下限严格小于上限</td></tr>
+            <tr><td>压力仪表没有返回</td><td>可能是地址、接线、参数或超时问题</td><td>检查后手动重试</td></tr>
+            <tr><td>TCS3400断线</td><td>I2C读取或寄存器校验失败</td><td>重新接好后再次操作</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer>
+      本帮助文档依据RGBWIR4_PRS4 V1.3当前固件生成。页面只提供填写指导和计算，不连接串口，也不会直接操作主板。
+    </footer>
+  </main>
+
+  <script>
+    (function () {
+      "use strict";
+
+      var integrations = [
+        { value: "003", level: "第1档", cycles: 1, time: 2.78, wait: 13, speed: "最快", label: "2.78ms", reply: "2.78", max: 1024 },
+        { value: "028", level: "第2档", cycles: 10, time: 27.80, wait: 40, speed: "较快", label: "27.8ms（默认）", reply: "27.8", max: 10240 },
+        { value: "051", level: "第3档", cycles: 18, time: 50.04, wait: 63, speed: "中等", label: "51ms档", reply: "51.0", max: 18432 },
+        { value: "103", level: "第4档", cycles: 37, time: 102.86, wait: 119, speed: "较慢", label: "103ms档", reply: "103.0", max: 37888 },
+        { value: "178", level: "第5档", cycles: 64, time: 177.92, wait: 198, speed: "慢", label: "178ms档", reply: "178.0", max: 65535 },
+        { value: "712", level: "第6档", cycles: 256, time: 711.68, wait: 761, speed: "最慢", label: "712ms档", reply: "712.0", max: 65535 }
+      ];
+
+      var gains = [
+        { value: "001", gain: 1, label: "1x", purpose: "不放大光信号，适合强光或近距离，最不容易饱和。" },
+        { value: "004", gain: 4, label: "4x（默认）", purpose: "适度放大光信号，适合普通RGBW LED，是上电默认档。" },
+        { value: "016", gain: 16, label: "16x", purpose: "明显放大较弱光信号，适合较暗LED或隔着外壳测试。" },
+        { value: "064", gain: 64, label: "64x", purpose: "最大幅度放大极弱光，适合远距离，但噪声和饱和风险最高。" }
+      ];
+
+      var tcsActions = {
+        integration: { fn: "0", label: "设置积分时间", parameterType: "integration" },
+        red: { fn: "1", label: "读取R通道", parameterType: "zero", expected: "返回R通道计数" },
+        green: { fn: "2", label: "读取G通道", parameterType: "zero", expected: "返回G通道计数" },
+        blue: { fn: "3", label: "读取B通道", parameterType: "zero", expected: "返回B通道计数" },
+        clear: { fn: "4", label: "读取Clear通道", parameterType: "zero", expected: "返回Clear通道计数" },
+        ir: { fn: "5", label: "读取IR通道", parameterType: "zero", expected: "返回IR通道计数" },
+        gain: { fn: "6", label: "设置增益", parameterType: "gain" },
+        id: { fn: "9", label: "读取芯片ID", parameterType: "zero", expected: "返回芯片ID数值" }
+      };
+
+      var pressureActions = {
+        read: { target: "5", fn: "0", label: "普通读取压力", kind: "address", expected: "返回带正负号的实际压力" },
+        zero: { target: "5", fn: "1", label: "清零压力仪表", kind: "address", expected: "成功返回0.0" },
+        lower: { fn: "0", label: "设置下限", kind: "limit", expected: "返回设置的下限值" },
+        upper: { fn: "1", label: "设置上限", kind: "limit", expected: "返回设置的上限值" },
+        compare: { fn: "2", label: "读取、比较并控制Y输出", kind: "address", expected: "返回实际压力并更新对应Y" }
+      };
+
+      var demoScenarios = {
+        "read-r": { channelType: "tcs" },
+        "set-integration": { channelType: "tcs" },
+        "set-gain": { channelType: "tcs" },
+        "pressure-read": { channelType: "address" },
+        "pressure-limit": { channelType: "pressure-group" }
+      };
+
+      var demoTcsChannels = {
+        red: { fn: "1", shortName: "R", workName: "读取R通道", result: "R通道计数" },
+        green: { fn: "2", shortName: "G", workName: "读取G通道", result: "G通道计数" },
+        blue: { fn: "3", shortName: "B", workName: "读取B通道", result: "B通道计数" },
+        clear: { fn: "4", shortName: "Clear", workName: "读取Clear通道", result: "Clear通道计数" },
+        ir: { fn: "5", shortName: "IR", workName: "读取IR通道", result: "IR通道计数" },
+        id: { fn: "9", shortName: "ID", workName: "读取芯片ID", result: "芯片ID数值" }
+      };
+
+      var currentMode = "tcs";
+      var tabs = document.querySelectorAll(".mode-tab");
+      var tcsControls = document.getElementById("tcs-controls");
+      var pressureControls = document.getElementById("pressure-controls");
+      var tcsSensor = document.getElementById("tcs-sensor");
+      var tcsAction = document.getElementById("tcs-action");
+      var tcsParameter = document.getElementById("tcs-parameter");
+      var tcsParameterField = document.getElementById("tcs-parameter-field");
+      var tcsParameterLabel = tcsParameterField.querySelector("label");
+      var tcsParameterHelp = document.getElementById("tcs-parameter-help");
+      var pressureAction = document.getElementById("pressure-action");
+      var pressureChannel = document.getElementById("pressure-channel");
+      var pressureChannelField = document.getElementById("pressure-channel-field");
+      var pressureParameter = document.getElementById("pressure-parameter");
+      var pressureParameterLabel = document.getElementById("pressure-parameter-label");
+      var pressureParameterHelp = document.getElementById("pressure-parameter-help");
+      var pin1Output = document.getElementById("pin1-output");
+      var pin2Output = document.getElementById("pin2-output");
+      var workOutput = document.getElementById("work-output");
+      var pin1Explain = document.getElementById("pin1-explain");
+      var pin1Help = document.getElementById("pin1-help");
+      var workPurposeHelp = document.getElementById("work-purpose-help");
+      var workPurpose = document.getElementById("work-purpose");
+      var expectedResult = document.getElementById("expected-result");
+      var maxCount = document.getElementById("max-count");
+      var speedAdvice = document.getElementById("speed-advice");
+      var operationEffect = document.getElementById("operation-effect");
+      var workRange = document.getElementById("work-range");
+      var adjustmentAdvice = document.getElementById("adjustment-advice");
+      var toolMessage = document.getElementById("tool-message");
+      var copyAll = document.getElementById("copy-all");
+      var calcIntegration = document.getElementById("calc-integration");
+      var calcGain = document.getElementById("calc-gain");
+      var demoChoices = document.querySelectorAll(".demo-choice");
+      var demoPlaybackButtons = document.querySelectorAll(".demo-playback-button");
+      var demoChannelField = document.getElementById("demo-channel-field");
+      var demoChannel = document.getElementById("demo-channel");
+      var demoChannelLabel = document.getElementById("demo-channel-label");
+      var demoReadChannelField = document.getElementById("demo-read-channel-field");
+      var demoReadChannel = document.getElementById("demo-read-channel");
+      var demoIntegrationField = document.getElementById("demo-integration-field");
+      var demoIntegration = document.getElementById("demo-integration");
+      var demoGainField = document.getElementById("demo-gain-field");
+      var demoGain = document.getElementById("demo-gain");
+      var demoPressureAddressField = document.getElementById("demo-pressure-address-field");
+      var demoPressureAddress = document.getElementById("demo-pressure-address");
+      var demoManualControls = document.getElementById("demo-manual-controls");
+      var demoPrev = document.getElementById("demo-prev");
+      var demoNext = document.getElementById("demo-next");
+      var demoReplay = document.getElementById("demo-replay");
+      var demoTableBody = document.getElementById("demo-table-body");
+      var demoTitleText = document.getElementById("demo-title-text");
+      var demoProgressText = document.getElementById("demo-progress-text");
+      var demoProgressFill = document.getElementById("demo-progress-fill");
+      var demoState = document.getElementById("demo-state");
+      var demoStepCount = document.getElementById("demo-step-count");
+      var demoStepTitle = document.getElementById("demo-step-title");
+      var demoStepDescription = document.getElementById("demo-step-description");
+      var demoTimer = 0;
+      var currentDemo = "read-r";
+      var demoPlaybackMode = "auto";
+      var demoRuntime = null;
+
+      function padNumber(value, width) {
+        var text = String(value);
+        while (text.length < width) {
+          text = "0" + text;
+        }
+        return text;
+      }
+
+      function populateSelect(select, items, selectedValue) {
+        select.innerHTML = "";
+        items.forEach(function (item) {
+          var option = document.createElement("option");
+          option.value = item.value;
+          option.textContent = item.value + " — " + item.label;
+          if (item.value === selectedValue) {
+            option.selected = true;
+          }
+          select.appendChild(option);
+        });
+      }
+
+      function normalizeDemoPressureAddress() {
+        var value = Number(demoPressureAddress.value);
+        if (!Number.isFinite(value)) {
+          value = 1;
+        }
+        value = Math.round(value);
+        value = Math.max(1, Math.min(247, value));
+        demoPressureAddress.value = String(value);
+        return value;
+      }
+
+      function configureDemoOptions(key) {
+        var channelType = demoScenarios[key].channelType;
+        var selectedValue = demoChannel.value || "1";
+        var channelNumber;
+
+        demoChannelField.hidden = channelType === "address";
+        demoReadChannelField.hidden = channelType !== "tcs";
+        demoIntegrationField.hidden = key !== "set-integration";
+        demoGainField.hidden = key !== "set-gain";
+        demoPressureAddressField.hidden =
+          key !== "pressure-read" && key !== "pressure-limit";
+
+        if (channelType === "address") {
+          normalizeDemoPressureAddress();
+          return;
+        }
+
+        demoChannel.innerHTML = "";
+        for (channelNumber = 1; channelNumber <= 4; channelNumber++) {
+          var option = document.createElement("option");
+          option.value = String(channelNumber);
+          if (channelType === "tcs") {
+            option.textContent = "第" + channelNumber + "路TCS3400";
+          } else {
+            option.textContent = "第" + channelNumber + "组（Y" + channelNumber + "）";
+          }
+          option.selected = option.value === selectedValue;
+          demoChannel.appendChild(option);
+        }
+
+        if (channelType === "tcs") {
+          demoChannelLabel.textContent = "环境光传感器";
+        } else {
+          demoChannelLabel.textContent = "压力逻辑组";
+        }
+        normalizeDemoPressureAddress();
+      }
+
+      function buildDemoScenario(key) {
+        var channel = demoChannel.value || "1";
+        var readChannel = demoTcsChannels[demoReadChannel.value];
+        var integration = getIntegration(demoIntegration.value);
+        var gain = getGain(demoGain.value);
+        var pressureAddressValue = normalizeDemoPressureAddress();
+        var address = padNumber(pressureAddressValue, 3);
+        var pressureTarget = String(5 + Number(channel));
+        var tcsReadRow = {
+          workName: readChannel.workName,
+          work: "000",
+          pin1: channel + readChannel.fn,
+          pin2: "00",
+          name: "Sensor" + channel + "：" + readChannel.shortName,
+          result: readChannel.result,
+          pin1Meaning: "Pin1十位" + channel + "代表第" + channel +
+            "路TCS3400，个位" + readChannel.fn + "代表" + readChannel.workName + "。",
+          workMeaning: readChannel.workName + "不需要额外参数，工作值2固定填写000。",
+          resultMeaning: "查看测量值，正常时返回第" + channel + "路TCS3400的" +
+            readChannel.result + "。"
+        };
+
+        if (key === "read-r") {
+          return {
+            title: "第" + channel + "路TCS3400" + readChannel.workName,
+            rows: [tcsReadRow]
+          };
+        }
+
+        if (key === "set-integration") {
+          return {
+            title: "第" + channel + "路设置" +
+              integration.label.replace("（默认）", "") + "后" + readChannel.workName,
+            rows: [
+              {
+                workName: "设置积分时间",
+                work: integration.value,
+                pin1: channel + "0",
+                pin2: "00",
+                name: "Sensor" + channel + "：积分" +
+                  integration.label.replace("（默认）", ""),
+                result: integration.reply,
+                pin1Meaning: "Pin1十位" + channel + "代表第" + channel + "路TCS3400，个位0代表设置积分时间。",
+                workMeaning: "工作值2填写" + integration.value + "，选择" +
+                  integration.level + "，把第" + channel + "路积分时间设置为" +
+                  integration.label.replace("（默认）", "") + "；最大计数" +
+                  integration.max + "，固件最长等待" + integration.wait +
+                  "ms。积分越短，测试越快。",
+                resultMeaning: "查看测量值，设置成功时返回积分档位值" +
+                  integration.reply + "。"
+              },
+              tcsReadRow
+            ]
+          };
+        }
+
+        if (key === "set-gain") {
+          return {
+            title: "第" + channel + "路设置" + gain.gain + "x后" +
+              readChannel.workName,
+            rows: [
+              {
+                workName: "设置增益",
+                work: gain.value,
+                pin1: channel + "6",
+                pin2: "00",
+                name: "Sensor" + channel + "：增益" + gain.gain + "x",
+                result: gain.gain + ".0",
+                pin1Meaning: "Pin1十位" + channel + "代表第" + channel +
+                  "路TCS3400，个位6代表设置增益。",
+                workMeaning: "工作值2填写" + gain.value + "，把第" + channel +
+                  "路增益设置为" + gain.gain + "x。" + gain.purpose +
+                  "同一光照下，增益越大数值通常越大，但噪声和饱和风险也越高。",
+                resultMeaning: "查看测量值，设置成功时返回增益值" +
+                  gain.gain + ".0。"
+              },
+              tcsReadRow
+            ]
+          };
+        }
+
+        if (key === "pressure-read") {
+          return {
+            title: "普通读取地址" + pressureAddressValue + "压力",
+            rows: [
+              {
+                workName: "普通读取压力",
+                work: address,
+                pin1: "50",
+                pin2: "00",
+                name: "Pressure：地址" + pressureAddressValue,
+                result: "实际压力Float",
+                pin1Meaning: "Pin1十位5代表压力仪表操作，个位0代表普通读取压力，不进行上下限比较。",
+                workMeaning: "工作值2填写" + address + "，表示读取Modbus地址" +
+                  pressureAddressValue + "的压力仪表。",
+                resultMeaning: "查看测量值，正常时返回地址" + pressureAddressValue +
+                  "仪表带正负号的实际压力。"
+              }
+            ]
+          };
+        }
+
+        return {
+          title: "第" + channel + "组上下限与地址" +
+            pressureAddressValue + "比较测试",
+          rows: [
+            {
+              workName: "设置下限",
+              work: "100",
+              pin1: pressureTarget + "0",
+              pin2: "00",
+              name: "Y" + channel + "：下限100",
+              result: "100.0",
+              pin1Meaning: "Pin1十位" + pressureTarget + "代表压力第" + channel + "组并对应Y" + channel + "，个位0代表设置下限。",
+              workMeaning: "工作值2填写100，把第" + channel + "组压力下限设置为100。",
+              resultMeaning: "查看测量值，设置成功时返回下限值100.0，并释放Y" + channel + "。"
+            },
+            {
+              workName: "设置上限",
+              work: "200",
+              pin1: pressureTarget + "1",
+              pin2: "00",
+              name: "Y" + channel + "：上限200",
+              result: "200.0",
+              pin1Meaning: "Pin1十位" + pressureTarget + "代表压力第" + channel + "组并对应Y" + channel + "，个位1代表设置上限。",
+              workMeaning: "工作值2填写200，把第" + channel + "组压力上限设置为200；上限必须大于下限100。",
+              resultMeaning: "查看测量值，设置成功时返回上限值200.0，并释放Y" + channel + "。"
+            },
+            {
+              workName: "读取并比较",
+              work: address,
+              pin1: pressureTarget + "2",
+              pin2: "00",
+              name: "地址" + pressureAddressValue + " → Y" + channel,
+              result: "实际压力Float",
+              pin1Meaning: "Pin1十位" + pressureTarget + "代表压力第" + channel + "组并对应Y" + channel + "，个位2代表读取压力并比较上下限。",
+              workMeaning: "工作值2填写" + address + "，表示读取Modbus地址" +
+                pressureAddressValue + "；该地址与压力逻辑组可以分别设置。",
+              resultMeaning: "查看测量值，正常时返回地址" + pressureAddressValue +
+                "的实际压力，并根据100～200的范围更新Y" + channel + "。"
+            }
+          ]
+        };
+      }
+
+      function getDemoStep(row, stageIndex, rowIndex, rowCount) {
+        var rowPrefix = rowCount > 1 ?
+          "第" + (rowIndex + 1) + "项“" + row.workName + "”： " : "";
+
+        if (stageIndex === 0) {
+          return {
+            title: "Pin1填写 " + row.pin1,
+            description: rowPrefix + row.pin1Meaning
+          };
+        }
+        if (stageIndex === 1) {
+          return {
+            title: "Pin2填写 00",
+            description: rowPrefix + "Pin2是保留码，当前不参与功能判断，调试时统一填写00。"
+          };
+        }
+        if (stageIndex === 2) {
+          return {
+            title: "工作值2填写 " + row.work,
+            description: rowPrefix + row.workMeaning
+          };
+        }
+        if (stageIndex === 3) {
+          return {
+            title: "时间字段保持空白",
+            description: rowPrefix + "时间字段默认不写，不填写0，也不填写等待毫秒数；完成其他字段后提交测试并等待返回。"
+          };
+        }
+        return {
+          title: "检查测量值",
+          description: rowPrefix + row.resultMeaning
+        };
+      }
+
+      function getIntegration(value) {
+        return integrations.filter(function (item) { return item.value === value; })[0];
+      }
+
+      function getGain(value) {
+        return gains.filter(function (item) { return item.value === value; })[0];
+      }
+
+      function setToolMessage(message, isError) {
+        toolMessage.textContent = message || "";
+        toolMessage.classList.toggle("error", Boolean(isError));
+      }
+
+      function setMode(mode) {
+        currentMode = mode;
+        tabs.forEach(function (tab) {
+          tab.setAttribute("aria-selected", tab.getAttribute("data-mode") === mode ? "true" : "false");
+        });
+        tcsControls.hidden = mode !== "tcs";
+        pressureControls.hidden = mode !== "pressure";
+        setToolMessage("");
+        renderAssistant();
+      }
+
+      function configureTcsParameter() {
+        var action = tcsActions[tcsAction.value];
+        if (action.parameterType === "integration") {
+          tcsParameterField.hidden = false;
+          tcsParameterLabel.textContent = "积分时间档位";
+          tcsParameterHelp.textContent = "只列出固件支持的六档积分时间。";
+          populateSelect(tcsParameter, integrations, "028");
+        } else if (action.parameterType === "gain") {
+          tcsParameterField.hidden = false;
+          tcsParameterLabel.textContent = "增益档位";
+          tcsParameterHelp.textContent = "只列出固件支持的四档增益。";
+          populateSelect(tcsParameter, gains, "004");
+        } else {
+          tcsParameterField.hidden = true;
+          tcsParameter.innerHTML = '<option value="000">000</option>';
+        }
+      }
+
+      function renderTcs() {
+        var sensor = tcsSensor.value;
+        var action = tcsActions[tcsAction.value];
+        var work = action.parameterType === "zero" ? "000" : tcsParameter.value;
+        var expected = action.expected;
+        var effect = action.label + "，第" + sensor + "路";
+        var range = "固定填写000";
+        var maxCountText = "由当前积分时间决定，最高65535";
+        var speedText = "读取速度由当前积分时间决定；积分越短，测试越快";
+        var adjustmentText =
+          "数值偏小可提高增益或延长积分；接近最大计数时降低增益或缩短积分";
+
+        if (action.parameterType === "integration") {
+          var integration = getIntegration(work);
+          expected = "积分档位值" + integration.reply;
+          effect = "将第" + sensor + "路积分时间设置为" + integration.label.replace("（默认）", "");
+          range = "003、028、051、103、178、712";
+          maxCountText = integration.max + "（" + integration.cycles +
+            "周期 × 1024，最高65535）";
+          speedText = integration.speed + "：典型积分" +
+            integration.time.toFixed(2) + "ms；固件最长等待" +
+            integration.wait + "ms";
+          adjustmentText = "数值偏小可提高增益或延长积分；接近" +
+            integration.max + "时降低增益或缩短积分";
+          workPurpose.textContent = "积分时间档位";
+          workPurposeHelp.textContent = "当前参数：" +
+            integration.label.replace("（默认）", "") + "积分时间；最大计数" +
+            integration.max + "，最长等待" + integration.wait +
+            "ms。积分越短测试越快；数值偏小时可提高增益。";
+        } else if (action.parameterType === "gain") {
+          var gain = getGain(work);
+          expected = "增益值" + gain.gain + ".0";
+          effect = "将第" + sensor + "路增益设置为" + gain.gain + "x";
+          range = "001、004、016、064";
+          maxCountText = "由当前积分时间决定，最高65535";
+          speedText = "增益不改变测试速度；读取速度仍由积分时间决定";
+          adjustmentText = gain.purpose +
+            "增益越大，同一光照下数值通常越大。";
+          workPurpose.textContent = "增益档位";
+          workPurposeHelp.textContent = "当前参数：" + gain.gain +
+            "x增益。" + gain.purpose +
+            "增益越大数值通常越大，但更容易出现噪声和饱和。";
+        } else {
+          workPurpose.textContent = "固定值000";
+          if (tcsAction.value === "id") {
+            maxCountText = "不适用（返回芯片ID）";
+            speedText = "读取ID不用于光强采样速度判断";
+            adjustmentText = "芯片ID不受积分时间和增益影响";
+            workPurposeHelp.textContent =
+              "当前操作读取芯片ID，工作值2固定填写000。";
+          } else {
+            workPurposeHelp.textContent =
+              "当前操作固定填写000；读取使用该路当前积分时间和增益。数值偏小时可提高增益或延长积分。";
+          }
+        }
+
+        pin1Output.value = sensor + action.fn;
+        workOutput.value = work;
+        pin1Help.textContent = "左边数字" + sensor + "表示第" + sensor +
+          "路TCS3400；右边数字" + action.fn + "表示" + action.label + "。";
+        pin1Explain.textContent =
+          "目标码" + sensor + "：第" + sensor + "路TCS3400；功能码" +
+          action.fn + "：" + action.label;
+        expectedResult.textContent = expected;
+        maxCount.textContent = maxCountText;
+        speedAdvice.textContent = speedText;
+        operationEffect.textContent = effect;
+        workRange.textContent = range;
+        adjustmentAdvice.textContent = adjustmentText;
+      }
+
+      function configurePressureParameter() {
+        var action = pressureActions[pressureAction.value];
+        var needsChannel = pressureAction.value === "lower" ||
+          pressureAction.value === "upper" ||
+          pressureAction.value === "compare";
+        pressureChannelField.hidden = !needsChannel;
+
+        if (action.kind === "limit") {
+          pressureParameterLabel.textContent = "整数压力限值";
+          pressureParameter.min = "0";
+          pressureParameter.max = "999";
+          pressureParameter.value = pressureAction.value === "lower" ? "100" : "200";
+          pressureParameterHelp.textContent = "允许范围：0～999；同时设置时下限必须小于上限。";
+        } else {
+          pressureParameterLabel.textContent = "Modbus地址";
+          pressureParameter.min = "1";
+          pressureParameter.max = "247";
+          pressureParameter.value = "1";
+          pressureParameterHelp.textContent = "允许范围：1～247，请填写仪表真实地址。";
+        }
+      }
+
+      function renderPressure() {
+        var actionKey = pressureAction.value;
+        var action = pressureActions[actionKey];
+        var rawValue = Number(pressureParameter.value);
+        var min = Number(pressureParameter.min);
+        var max = Number(pressureParameter.max);
+        var channel = Number(pressureChannel.value);
+        var target = action.target || String(5 + channel);
+        var valid = Number.isInteger(rawValue) && rawValue >= min && rawValue <= max;
+
+        var targetMeaning;
+
+        if (target === "5") {
+          targetMeaning = "压力仪表操作";
+        } else {
+          targetMeaning = "压力第" + channel + "组，对应Y" + channel;
+        }
+
+        pin1Output.value = target + action.fn;
+        pin1Help.textContent = "左边数字" + target + "表示" +
+          targetMeaning + "；右边数字" + action.fn + "表示" +
+          action.label + "。";
+        pin1Explain.textContent =
+          "目标码" + target + "：" + targetMeaning + "；功能码" +
+          action.fn + "：" + action.label;
+        expectedResult.textContent = action.expected;
+        if (action.kind === "limit") {
+          workPurpose.textContent = "整数压力限值";
+          workPurposeHelp.textContent = "当前参数：整数压力限值，用于对应通道的上下限判断。";
+          maxCount.textContent = "不适用；压力限值允许000～999";
+          speedAdvice.textContent = "本机保存限值，不等待压力仪表采样";
+          adjustmentAdvice.textContent =
+            "同时设置时必须保证下限小于上限；限值掉电后清除";
+        } else {
+          workPurpose.textContent = "Modbus仪表地址";
+          workPurposeHelp.textContent = "当前参数：Modbus仪表地址，决定本次访问哪台压力仪表。";
+          maxCount.textContent = "不适用；返回带正负号的实际压力Float";
+          speedAdvice.textContent =
+            "Modbus响应超时200ms，实际速度由仪表响应决定";
+          adjustmentAdvice.textContent =
+            "读取异常时检查实际地址、RS485 A/B线和115200 / 8N1";
+        }
+
+        if (!valid) {
+          workOutput.value = "---";
+          workRange.textContent = padNumber(min, 3) + "～" + padNumber(max, 3);
+          operationEffect.textContent = "工作值2超出允许范围";
+          setToolMessage("请把工作值2调整到允许范围内。", true);
+          return;
+        }
+
+        workOutput.value = padNumber(rawValue, 3);
+        workRange.textContent = padNumber(min, 3) + "～" + padNumber(max, 3);
+        setToolMessage("");
+
+        if (actionKey === "read") {
+          operationEffect.textContent = "读取地址" + rawValue + "的压力，不改变Y输出";
+        } else if (actionKey === "zero") {
+          operationEffect.textContent = "清零地址" + rawValue + "的压力仪表";
+        } else if (actionKey === "lower") {
+          operationEffect.textContent = "设置第" + channel + "组下限为" + rawValue;
+        } else if (actionKey === "upper") {
+          operationEffect.textContent = "设置第" + channel + "组上限为" + rawValue;
+        } else {
+          operationEffect.textContent = "读取地址" + rawValue + "，比较后控制Y" + channel;
+        }
+      }
+
+      function renderAssistant() {
+        if (currentMode === "tcs") {
+          renderTcs();
+        } else {
+          renderPressure();
+        }
+      }
+
+      function normalizePin2() {
+        var digits = pin2Output.value.replace(/\D/g, "").slice(0, 2);
+        pin2Output.value = digits === "" ? "00" : padNumber(digits, 2);
+      }
+
+      function copyText(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+          return navigator.clipboard.writeText(text);
+        }
+        return new Promise(function (resolve, reject) {
+          var helper = document.createElement("textarea");
+          helper.value = text;
+          helper.setAttribute("readonly", "");
+          helper.style.position = "fixed";
+          helper.style.opacity = "0";
+          document.body.appendChild(helper);
+          helper.select();
+          try {
+            document.execCommand("copy") ? resolve() : reject(new Error("copy failed"));
+          } catch (error) {
+            reject(error);
+          }
+          document.body.removeChild(helper);
+        });
+      }
+
+      function reportCopy(label, promise) {
+        promise.then(function () {
+          setToolMessage(label + "已复制。");
+        }).catch(function () {
+          setToolMessage("浏览器未允许自动复制，请手动选择数值。", true);
+        });
+      }
+
+      function renderCalculator() {
+        var integration = getIntegration(calcIntegration.value);
+        var gain = getGain(calcGain.value);
+        var relative = integration.cycles * gain.gain;
+        var maxRelative = 256 * 64;
+        var meterPercent = Math.max(2, Math.min(100, relative / maxRelative * 100));
+
+        document.getElementById("calc-work").textContent = integration.value;
+        document.getElementById("calc-level").textContent = integration.level;
+        document.getElementById("calc-cycles").textContent = String(integration.cycles);
+        document.getElementById("calc-time").textContent = integration.time.toFixed(2) + "ms";
+        document.getElementById("calc-speed").textContent = integration.speed;
+        document.getElementById("calc-wait").textContent = integration.wait + "ms";
+        document.getElementById("calc-counts").textContent = String(integration.max);
+        document.getElementById("calc-relative").textContent = String(relative);
+        document.getElementById("calc-gain-label").textContent = gain.gain + "x";
+        document.getElementById("sensitivity-fill").style.width = meterPercent + "%";
+        document.getElementById("calc-formula").textContent =
+          integration.cycles + "周期 × 2.78ms = " + integration.time.toFixed(2) +
+          "ms；min(" + integration.cycles + " × 1024, 65535) = " +
+          integration.max + "；固件最长等待" + integration.wait + "ms";
+      }
+
+      function renderDemoTable(scenario) {
+        demoTableBody.innerHTML = "";
+        scenario.rows.forEach(function (row, index) {
+          var tr = document.createElement("tr");
+          var values = [
+            String(index + 1),
+            "功能测量",
+            "外部模块",
+            "串口模块",
+            "串口2",
+            row.work,
+            "",
+            row.pin1,
+            row.pin2,
+            row.workName + " / " + row.name,
+            row.result
+          ];
+          values.forEach(function (value, cellIndex) {
+            var td = document.createElement("td");
+            td.textContent = value;
+            if (cellIndex === 5 || cellIndex === 7 || cellIndex === 8) {
+              td.className = "numeric ict-key";
+            }
+            if (cellIndex === 6) {
+              td.className = "demo-time-empty";
+              td.setAttribute("aria-label", "时间字段留空");
+            }
+            tr.appendChild(td);
+          });
+          demoTableBody.appendChild(tr);
+        });
+      }
+
+      function clearDemoState() {
+        if (demoTimer) {
+          window.clearTimeout(demoTimer);
+          demoTimer = 0;
+        }
+        demoTableBody.querySelectorAll("td").forEach(function (cell) {
+          cell.classList.remove("demo-active", "demo-done");
+        });
+        demoTableBody.querySelectorAll("tr").forEach(function (row) {
+          row.classList.remove("demo-row-active");
+        });
+        demoRuntime = null;
+      }
+
+      function updateManualButtons() {
+        if (!demoRuntime) {
+          demoPrev.disabled = true;
+          demoNext.disabled = true;
+          return;
+        }
+        demoPrev.disabled = demoRuntime.currentStage <= 0;
+        demoNext.disabled =
+          demoRuntime.currentStage >= demoRuntime.totalStages - 1;
+      }
+
+      function showDemoStage(stage) {
+        var runtime = demoRuntime;
+        var rowIndex = Math.floor(stage / runtime.cellOrder.length);
+        var stageIndex = stage % runtime.cellOrder.length;
+        var rows = demoTableBody.querySelectorAll("tr");
+        var row = rows[rowIndex];
+        var cell = row.children[runtime.cellOrder[stageIndex]];
+        var stepInfo = getDemoStep(
+          runtime.scenario.rows[rowIndex],
+          stageIndex,
+          rowIndex,
+          runtime.scenario.rows.length
+        );
+        var previousStage;
+        var previousRowIndex;
+        var previousStageIndex;
+        var tableWrap = document.querySelector(".demo-table-wrap");
+        var percent;
+
+        demoTableBody.querySelectorAll("td").forEach(function (tableCell) {
+          tableCell.classList.remove("demo-active", "demo-done");
+        });
+        rows.forEach(function (tableRow) {
+          tableRow.classList.remove("demo-row-active");
+        });
+
+        for (previousStage = 0; previousStage < stage; previousStage++) {
+          previousRowIndex = Math.floor(previousStage / runtime.cellOrder.length);
+          previousStageIndex = previousStage % runtime.cellOrder.length;
+          rows[previousRowIndex].children[
+            runtime.cellOrder[previousStageIndex]
+          ].classList.add("demo-done");
+        }
+
+        row.classList.add("demo-row-active");
+        cell.classList.add("demo-active");
+        runtime.currentStage = stage;
+        percent = Math.round(((stage + 1) / runtime.totalStages) * 100);
+        demoProgressText.textContent = percent + "%";
+        demoProgressFill.style.width = percent + "%";
+        demoState.textContent = "第" + (rowIndex + 1) + "项：" +
+          runtime.scenario.rows[rowIndex].workName;
+        demoStepCount.textContent = "步骤 " + (stage + 1) + " / " +
+          runtime.totalStages;
+        demoStepTitle.textContent = stepInfo.title;
+        demoStepDescription.textContent = stepInfo.description;
+
+        tableWrap.scrollTo({
+          left: Math.max(
+            0,
+            cell.offsetLeft - tableWrap.clientWidth / 2 + cell.offsetWidth / 2
+          ),
+          behavior: runtime.reducedMotion ? "auto" : "smooth"
+        });
+        updateManualButtons();
+      }
+
+      function completeAutoDemo() {
+        var activeCell;
+        var activeRow;
+
+        if (!demoRuntime || demoPlaybackMode !== "auto") {
+          return;
+        }
+        activeCell = demoTableBody.querySelector("td.demo-active");
+        activeRow = demoTableBody.querySelector("tr.demo-row-active");
+        if (activeCell) {
+          activeCell.classList.remove("demo-active");
+          activeCell.classList.add("demo-done");
+        }
+        if (activeRow) {
+          activeRow.classList.remove("demo-row-active");
+        }
+        demoState.textContent = "演示完成：" + demoRuntime.scenario.title;
+        demoStepTitle.textContent = "演示完成";
+        demoStepDescription.textContent =
+          "所有字段已经演示完毕；时间字段保持空白，按表中Pin1、Pin2和工作值2填写即可。";
+        demoTimer = 0;
+      }
+
+      function advanceAutoDemo() {
+        var nextStage;
+
+        if (!demoRuntime || demoPlaybackMode !== "auto") {
+          return;
+        }
+        nextStage = demoRuntime.currentStage + 1;
+        if (nextStage < demoRuntime.totalStages) {
+          showDemoStage(nextStage);
+          demoTimer = window.setTimeout(
+            advanceAutoDemo,
+            demoRuntime.interval
+          );
+        } else {
+          completeAutoDemo();
+        }
+      }
+
+      function runDemo(key) {
+        var scenario;
+        var reducedMotion;
+
+        configureDemoOptions(key);
+        scenario = buildDemoScenario(key);
+        reducedMotion =
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        currentDemo = key;
+        clearDemoState();
+        renderDemoTable(scenario);
+        demoRuntime = {
+          scenario: scenario,
+          cellOrder: [7, 8, 5, 6, 10],
+          totalStages: scenario.rows.length * 5,
+          currentStage: -1,
+          reducedMotion: reducedMotion,
+          interval: reducedMotion ? 100 : 1100
+        };
+        demoTitleText.textContent = scenario.title;
+        demoProgressText.textContent = "0%";
+        demoProgressFill.style.width = "0%";
+        demoState.textContent = demoPlaybackMode === "auto" ?
+          "自动模式：准备演示" : "手动模式：点击下一步";
+        demoStepCount.textContent = "步骤 0 / " + demoRuntime.totalStages;
+        demoStepTitle.textContent = "准备演示";
+        demoStepDescription.textContent = "已选择“" + scenario.title +
+          "”，将从Pin1开始逐项说明填写内容。";
+        demoChoices.forEach(function (button) {
+          button.classList.toggle(
+            "active",
+            button.getAttribute("data-demo") === key
+          );
+        });
+        updateManualButtons();
+
+        if (demoPlaybackMode === "auto") {
+          demoTimer = window.setTimeout(
+            advanceAutoDemo,
+            reducedMotion ? 50 : 500
+          );
+        }
+      }
+
+      function setDemoPlaybackMode(mode) {
+        demoPlaybackMode = mode;
+        demoManualControls.hidden = mode !== "manual";
+        demoPlaybackButtons.forEach(function (button) {
+          var active = button.getAttribute("data-playback") === mode;
+          button.classList.toggle("active", active);
+          button.setAttribute("aria-pressed", active ? "true" : "false");
+        });
+        runDemo(currentDemo);
+      }
+
+      tabs.forEach(function (tab) {
+        tab.addEventListener("click", function () {
+          setMode(tab.getAttribute("data-mode"));
+        });
+      });
+
+      tcsSensor.addEventListener("change", renderAssistant);
+      tcsAction.addEventListener("change", function () {
+        configureTcsParameter();
+        renderAssistant();
+      });
+      tcsParameter.addEventListener("change", renderAssistant);
+
+      pressureAction.addEventListener("change", function () {
+        configurePressureParameter();
+        renderAssistant();
+      });
+      pressureChannel.addEventListener("change", renderAssistant);
+      pressureParameter.addEventListener("input", renderAssistant);
+
+      pin2Output.addEventListener("input", function () {
+        pin2Output.value = pin2Output.value.replace(/\D/g, "").slice(0, 2);
+      });
+      pin2Output.addEventListener("blur", normalizePin2);
+
+      document.querySelectorAll("[data-copy-target]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          var target = document.getElementById(button.getAttribute("data-copy-target"));
+          if (target.value === "---") {
+            setToolMessage("当前工作值2无效，不能复制。", true);
+            return;
+          }
+          reportCopy(target.value, copyText(target.value));
+        });
+      });
+
+      copyAll.addEventListener("click", function () {
+        normalizePin2();
+        if (workOutput.value === "---") {
+          setToolMessage("当前工作值2无效，不能复制。", true);
+          return;
+        }
+        var summary = "Pin1：" + pin1Output.value + "\n" +
+          "Pin2：" + pin2Output.value + "\n" +
+          "工作值2：" + workOutput.value;
+        reportCopy("三项填写值", copyText(summary));
+      });
+
+      calcIntegration.addEventListener("change", renderCalculator);
+      calcGain.addEventListener("change", renderCalculator);
+      demoPlaybackButtons.forEach(function (button) {
+        button.addEventListener("click", function () {
+          setDemoPlaybackMode(button.getAttribute("data-playback"));
+        });
+      });
+      demoChoices.forEach(function (button) {
+        button.addEventListener("click", function () {
+          runDemo(button.getAttribute("data-demo"));
+        });
+      });
+      demoChannel.addEventListener("change", function () {
+        runDemo(currentDemo);
+      });
+      demoReadChannel.addEventListener("change", function () {
+        runDemo(currentDemo);
+      });
+      demoIntegration.addEventListener("change", function () {
+        runDemo(currentDemo);
+      });
+      demoGain.addEventListener("change", function () {
+        runDemo(currentDemo);
+      });
+      demoPressureAddress.addEventListener("change", function () {
+        normalizeDemoPressureAddress();
+        runDemo(currentDemo);
+      });
+      demoPrev.addEventListener("click", function () {
+        if (demoRuntime && demoRuntime.currentStage > 0) {
+          showDemoStage(demoRuntime.currentStage - 1);
+        }
+      });
+      demoNext.addEventListener("click", function () {
+        if (
+          demoRuntime &&
+          demoRuntime.currentStage < demoRuntime.totalStages - 1
+        ) {
+          showDemoStage(demoRuntime.currentStage + 1);
+        }
+      });
+      demoReplay.addEventListener("click", function () {
+        runDemo(currentDemo);
+      });
+
+      configureTcsParameter();
+      configurePressureParameter();
+      populateSelect(calcIntegration, integrations, "028");
+      populateSelect(calcGain, gains, "004");
+      normalizePin2();
+      renderAssistant();
+      renderCalculator();
+      runDemo(currentDemo);
+    }());
+  </script>
+</body>
+</html>
