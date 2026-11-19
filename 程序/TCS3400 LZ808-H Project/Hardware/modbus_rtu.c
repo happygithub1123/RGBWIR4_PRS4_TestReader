@@ -22,7 +22,7 @@ typedef enum
 static ModbusState_t g_modbus_state;                              // 记录当前压力Modbus事务状态
 static uint8 g_modbus_expected_slave;                             // 保存当前请求期望的仪表地址
 static uint8 g_modbus_expected_function;                          // 保存当前请求期望的功能码
-static uint8 g_modbus_expected_length;                            // 保存按响应头计算出的完整帧长
+static uint8 g_modbus_expected_length;                            // 保存本次请求预期的响应帧长
 static uint8 g_modbus_response_length;                            // 记录当前已经收到的响应字节数
 static uint8 xdata g_modbus_response[MODBUS_RESPONSE_MAX_LENGTH]; // 缓存稳定main的完整Modbus响应
 static uint32 g_modbus_start_ms;                                  // 记录当前压力响应超时起点
@@ -34,9 +34,11 @@ static uint16 ModbusRtu_CalcCrc(const uint8 *buffer, uint8 length); // 计算本
  * @param  request 请求帧
  * @param  slave 目标从机地址
  * @param  function 目标功能码
+ * @param  normal_length 本次请求对应的正常响应长度
  * @retval 1：请求已发送；0：总线忙或发送失败
  */
-static bit ModbusRtu_StartRequest(uint8 *request, uint8 slave, uint8 function)
+static bit ModbusRtu_StartRequest(uint8 *request, uint8 slave, uint8 function,
+                                  uint8 normal_length)
 {
     // 本项目中该函数补齐请求CRC、保存预期响应身份并按稳定main发送一次请求
     uint16 crc;
@@ -53,7 +55,7 @@ static bit ModbusRtu_StartRequest(uint8 *request, uint8 slave, uint8 function)
     // 保存本次请求身份，后续响应必须同时匹配地址和功能码
     g_modbus_expected_slave = slave;
     g_modbus_expected_function = function;
-    g_modbus_expected_length = 0u;
+    g_modbus_expected_length = normal_length;
     g_modbus_response_length = 0u;
     Rs485_ClearRx(); // 发送前丢弃上一事务残留字节
 
@@ -97,13 +99,12 @@ static void ModbusRtu_ValidateResponse(void)
 }
 
 /**
- * @brief  根据响应头确定完整帧长度
+ * @brief  核对响应头并识别异常帧长度
  * @param  无
  * @retval 无
  */
-static void ModbusRtu_UpdateExpectedLength(void)
+static void ModbusRtu_CheckResponseHeader(void)
 {
-    // 本项目中该函数根据功能码和字节数动态确定稳定main的完整响应长度
     uint8 function;
 
     if (g_modbus_response_length < 2u)
@@ -124,18 +125,12 @@ static void ModbusRtu_UpdateExpectedLength(void)
         return;
     }
 
-    if (function == MODBUS_FUNCTION_WRITE_SINGLE_COIL)
+    if ((function == MODBUS_FUNCTION_READ_HOLDING) &&
+        (g_modbus_response_length == 3u) &&
+        (g_modbus_response[2] != g_modbus_expected_length - 5u))
     {
-        g_modbus_expected_length = 8u; // 写单线圈正常响应完整回显请求
-    }
-    else if ((function == MODBUS_FUNCTION_READ_HOLDING) &&
-             (g_modbus_response_length >= 3u))
-    {
-        g_modbus_expected_length = (uint8)(g_modbus_response[2] + 5u); // 地址、功能、字节数、数据、CRC
-        if (g_modbus_expected_length > MODBUS_RESPONSE_MAX_LENGTH)
-        {
-            g_modbus_state = MODBUS_STATE_ERROR;
-        }
+        // 字节数必须与请求的寄存器数量一致，避免畸形响应决定收帧长度
+        g_modbus_state = MODBUS_STATE_ERROR;
     }
 }
 
@@ -181,7 +176,8 @@ bit ModbusRtu_StartReadHolding(uint8 slave, uint16 address, uint16 count)
     request[3] = (uint8)(address & 0xFFu);
     request[4] = (uint8)(count >> 8);
     request[5] = (uint8)(count & 0xFFu);
-    return ModbusRtu_StartRequest(request, slave, MODBUS_FUNCTION_READ_HOLDING);
+    return ModbusRtu_StartRequest(request, slave, MODBUS_FUNCTION_READ_HOLDING,
+                                  (uint8)(5u + 2u * count));
 }
 
 /**
@@ -210,7 +206,8 @@ bit ModbusRtu_StartWriteSingleCoil(uint8 slave, uint16 address, uint16 value)
     request[3] = (uint8)(address & 0xFFu);
     request[4] = (uint8)(value >> 8);
     request[5] = (uint8)(value & 0xFFu);
-    return ModbusRtu_StartRequest(request, slave, MODBUS_FUNCTION_WRITE_SINGLE_COIL);
+    return ModbusRtu_StartRequest(request, slave, MODBUS_FUNCTION_WRITE_SINGLE_COIL,
+                                  MODBUS_REQUEST_LENGTH);
 }
 
 /**
@@ -244,7 +241,7 @@ void ModbusRtu_Poll(void)
         }
 
         g_modbus_response[g_modbus_response_length++] = dat;
-        ModbusRtu_UpdateExpectedLength();
+        ModbusRtu_CheckResponseHeader();
         if (g_modbus_state == MODBUS_STATE_ERROR)
         {
             return;
