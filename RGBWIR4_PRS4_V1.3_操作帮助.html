@@ -2335,7 +2335,7 @@
             </li>
             <li>
               <strong>③ 比较读取</strong>
-              <p>第1～4组使用Pin1 62 / 72 / 82 / 92，工作值2填写地址001～247；读取成功后更新Y1～Y4。</p>
+              <p>第1～4组使用Pin1 62 / 72 / 82 / 92，工作值2填写地址001～247；每次读取成功只更新所选组的Y输出。持续监控时，重复发送该组的比较读取命令。</p>
             </li>
           </ul>
         </section>
@@ -2373,7 +2373,7 @@
       <div class="two-column">
         <article class="plain-panel">
           <h3>压力值换算</h3>
-          <p>主板先读取有符号原始压力，再读取仪表小数位。小数位允许0～4，最终结果按原始值除以10的对应次方计算。</p>
+          <p>主板先读取有符号原始压力，再读取仪表小数位。V1.3固件接受0～3位小数，最终结果按原始值除以10的对应次方计算。</p>
           <p>例如原始值为 <code>-1234</code>，小数位为 <code>2</code>，返回压力为 <code>-12.34</code>，单位沿用仪表当前显示单位。</p>
         </article>
         <article class="plain-panel amber">
@@ -3009,7 +3009,7 @@
       function renderPressure() {
         var actionKey = pressureAction.value;
         var action = pressureActions[actionKey];
-        var rawValue = Number(pressureParameter.value);
+        var rawValue = pressureParameter.valueAsNumber;
         var min = Number(pressureParameter.min);
         var max = Number(pressureParameter.max);
         var channel = Number(pressureChannel.value);
@@ -3052,8 +3052,8 @@
         if (!valid) {
           workOutput.value = "---";
           workRange.textContent = padNumber(min, 3) + "～" + padNumber(max, 3);
-          operationEffect.textContent = "工作值2超出允许范围";
-          setToolMessage("请把工作值2调整到允许范围内。", true);
+          operationEffect.textContent = "工作值2无效";
+          setToolMessage("请在允许范围内填写整数。", true);
           return;
         }
 
